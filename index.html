@@ -1,0 +1,1716 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8">
+<title>ECG BLE</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#0d1117;--fg:#e6edf3;--dim:#8b949e;--trace:#3fb950;--warn:#f85149;--line:#21262d}
+body.paper{--bg:#fbf5f3;--fg:#1a1a1a;--dim:#6b6b6b;--line:#e0d5d2}
+body.paper button{background:#fff;color:#1a1a1a;border-color:#d5c8c4}
+body.paper button:hover{background:#f0e7e4}
+body.paper .seg{border-color:#d5c8c4}
+body.paper .seg button{border-right-color:#d5c8c4}
+body.paper .seg button.on{background:#1f6feb;color:#fff}
+body.paper canvas{background:#fffaf8;border-color:#e0d5d2}
+body.paper .ok{background:#dff3e4;color:#1a7f37}
+body.paper .bad{background:#ffe3e1;color:#c0342b}
+body.paper .rev{background:#fff3d4;color:#8a6100}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;padding:12px 20px;
+ border-bottom:1px solid var(--line)}
+h1{font-size:15px;font-weight:500;margin:0;color:var(--dim)}
+.hr{font-size:32px;font-weight:500;font-variant-numeric:tabular-nums}
+.hr small{font-size:13px;color:var(--dim);font-weight:400}
+.stat{color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
+.pill{padding:3px 10px;border-radius:999px;font-size:13px}
+.ok{background:#132d1b;color:var(--trace)}
+.bad{background:#3d1418;color:var(--warn)}
+.rev{background:#3a2d0f;color:#d29922}
+main{padding:14px 20px 24px}
+canvas{width:100%;display:block;background:#000;border:1px solid var(--line);border-radius:8px}
+#c{height:360px;cursor:ew-resize}
+#r{height:96px;margin-top:10px}
+#pos{width:100%;margin-top:12px;accent-color:#1f6feb}
+.row{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:12px;
+ color:var(--dim);font-size:13px}
+.seg{display:inline-flex;border:1px solid #30363d;border-radius:6px;overflow:hidden}
+.seg button{border:0;border-right:1px solid #30363d;border-radius:0}
+.seg button:last-child{border-right:0}
+.seg button.on{background:#1f6feb;color:#fff}
+button{background:#21262d;color:var(--fg);border:1px solid #30363d;border-radius:6px;
+ padding:5px 12px;font-size:13px;cursor:pointer}
+button:hover{background:#30363d}
+.note{margin-top:12px;color:var(--dim);font-size:12px;max-width:820px}
+#interp{margin-top:16px;border:1px solid var(--line);border-radius:10px;padding:14px 16px;max-width:820px}
+#interp h2{font-size:13px;font-weight:500;margin:0 0 10px;color:var(--dim);
+ display:flex;align-items:center;gap:10px}
+#ilist{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+#ilist li{display:flex;gap:10px;align-items:baseline;font-size:14px}
+#ilist .k{flex:0 0 116px;color:var(--dim);font-size:13px}
+#ilist .v{flex:1}
+#ilist .ev{color:var(--dim);font-size:12px;font-variant-numeric:tabular-nums}
+#rec.on{background:#c0342b;color:#fff;border-color:#c0342b}
+.flag{padding:2px 8px;border-radius:999px;font-size:12px}
+.f-ok{background:#dff3e4;color:#1a7f37}
+.f-warn{background:#fff3d4;color:#8a6100}
+.f-bad{background:#ffe3e1;color:#c0342b}
+body:not(.paper) .f-ok{background:#132d1b;color:#3fb950}
+body:not(.paper) .f-warn{background:#3a2d0f;color:#d29922}
+body:not(.paper) .f-bad{background:#3d1418;color:#f85149}
+.idisc{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);
+ color:var(--dim);font-size:12px}
+</style></head><body>
+<header>
+  <h1>ECG canlı monitör</h1>
+  <div class="hr"><span id="hr">--</span> <small>atım/dk</small></div>
+  <span id="lead" class="pill bad">elektrot yok</span>
+  <span id="mode" class="pill ok">canlı</span>
+  <div class="hr"><span id="rr">--</span> <small>soluk/dk</small></div>
+  <span class="stat" id="rn"></span>
+  <span class="stat">ham <span id="rng">--</span> mV</span>
+  <span class="stat" id="tpos"></span>
+  <span class="stat" id="rrstat"></span>
+  <span class="stat" id="ivals"></span>
+  <span class="stat" id="cal"></span>
+</header>
+<main>
+  <canvas id="c" width="1600" height="720"></canvas>
+  <canvas id="r" width="1600" height="200"></canvas>
+  <input type="range" id="pos" min="0" max="0" value="0">
+  <div class="row">
+    <span>süpürme</span>
+    <span class="seg" id="sweep">
+      <button data-v="12.5">12,5 mm/sn</button>
+      <button data-v="25" class="on">25 mm/sn</button>
+      <button data-v="50">50 mm/sn</button>
+      <button data-v="100">100 mm/sn</button>
+      <button data-v="200">200 mm/sn</button>
+    </span>
+    <span>kazanç</span>
+    <span class="seg" id="gain">
+      <button data-v="5">5 mm/mV</button>
+      <button data-v="10" class="on">10 mm/mV</button>
+      <button data-v="20">20 mm/mV</button>
+    </span>
+    <span>fare</span>
+    <span class="seg" id="tool">
+      <button data-v="pan" class="on">gezin</button>
+      <button data-v="cal">kaliper</button>
+    </span>
+    <button id="pause">duraklat</button>
+    <button id="live">canlıya dön</button>
+    <button id="ptbtn">P/T gizle</button>
+    <button id="calclr">kaliperi sil</button>
+    <button id="rec">● kayıt başlat</button>
+    <button id="dl" disabled>kaydı indir</button>
+    <span class="stat" id="recstat"></span>
+    <span class="seg" id="theme">
+      <button data-v="paper" class="on">kağıt</button>
+      <button data-v="mon">monitör</button>
+    </span>
+  </div>
+  <section id="interp">
+    <h2>canlı ön değerlendirme <span id="iq" class="flag f-warn">bekleniyor</span>
+      <span class="ev" id="iwin"></span></h2>
+    <ul id="ilist"></ul>
+    <div class="idisc"><strong>Elektrot yerleşimi:</strong> RA sağ kol, RL sağ bacak,
+    <strong>LA sol alt karın/sol bacak (Lead II)</strong>. LA'yı sol kola koyarsan
+    Lead I olur; atriyal aktivite orada neredeyse görünmez — aynı donanımla flutter
+    tanıma oranı %11,6'dan %76,6'ya çıkıyor (Avidan ve ark. 2025, CJC Open).
+    <br><br><strong>Yanlış pozitiflerin baskın kaynağı gürültü değil, ektopidir.</strong>
+    Apple'ın kendi verisinde sık PAC varlığında sınıflandırılabilen kayıtların %23,5'i,
+    sık PVC'de %24,1'i AF olarak etiketlenmiş; bigeminide kayıtların %92,5'i
+    sınıflandırılamamış. Sinyal kalitesi filtresi bunu çözmez.
+    <br><br><strong>Bu bir tanı değildir.</strong> Tek derivasyondan,
+    kalibre edilmemiş bir cihazla üretilmiş otomatik ön değerlendirmedir.
+    Ritim yorumu RR düzeni ve P tepesi görünürlüğüne dayanır. PR, QRS, QT ve
+    P süresi otomatik dalga sınırlarından ölçülür (QRS: türev zarfı, P: eğim
+    oranı, T bitişi: trapez alan); QTDB sel100 kaydında elle işaretlere göre
+    QT +7±17 ms, PR +4±12 ms. Tek derivasyonda T ve P başlangıçları en
+    güvenilmez noktalardır (σ 25–35 ms, literatür); T genliği düşükken QT'ye
+    güvenme. Hız 50–150/dk dışındaysa ritim sınıflandırılmaz (onaylı
+    tek-derivasyon cihazlarının benimsediği sınır).
+    Klinik karar için 12 derivasyonlu EKG gerekir.
+    <br>Duraklama/asistoli bulguları tek derivasyonda özellikle güvenilmezdir:
+    yoğun bakım verisinde duraklama alarmlarının %88'i, asistoli alarmlarının %67'si
+    yanlış çıkmış ve bunların %91–94'ü ancak <em>başka bir derivasyona</em> bakılarak
+    ayırt edilebilmiştir (Drew ve ark. 2014, PLoS ONE 9:e110274) — bu cihazda o
+    derivasyon yoktur.</div>
+  </section>
+  <div class="note"><span id="gridnote"></span>
+  Genlik AD8232'nin ~100x kazancı varsayılarak ölçeklenir — yaklaşıktır, klinik kalibrasyon değildir.
+  Geriye gitmek için izi sürükle, tekerleği çevir, çubuğu kaydır veya ok tuşlarını kullan.
+  Boşluk duraklatır/sürdürür — duraklatınca fare otomatik kalipere geçer.
+  Kaliper modunda yatay sürükle = süre (ms, /dk), dikey sürükle = genlik (mV, iki yatay çizgi);
+  Shift basılı tutarsan uçlar en yakın R tepesine, genlikte izin değerine kilitlenir.
+  Esc kaliperi siler. Son 5 dakika saklanır.
+  Üçgenler otomatik bulunan R tepeleri, altlarındaki parantezler RR aralığı (ms).
+  Halkalar P/T tepeleri; küçük köşeli parantezler dalga başlangıç [ ve bitişleri ]
+  (P yeşil, QRS siyah, T mor). Başlıktaki PR/QRS/QT/QTc/Tp-e görünen pencerenin
+  medyanıdır (QTc Fridericia). İz sıfır fazlı işlenir (medyan taban + 40 Hz), bu
+  yüzden ekran gerçek zamandan ~0,5 sn geridedir.</div>
+</main>
+<script>
+// qrs.js — akis tabanli QRS tespiti (Pan & Tompkins 1985, IEEE TBME 32:230).
+//
+// Hem tarayicida (web_ecg.py sayfaya gomer) hem node'da (tools/eval_qrs.py)
+// calisir; DOM'a dokunmaz. Girdi: gosterim filtresinden gecmis (0.5-40 Hz)
+// ornekler, tek tek. Cikti: mutlak ornek indeksi olarak QRS fidusiyelleri.
+//
+// Zincir: 5-15 Hz bant gecis -> 5 noktali turev -> kare -> 150 ms hareketli
+// pencere integrali (MWI) -> MWI tepelerinde uyarlanir esik (sinyal/gurultu
+// ayri), 200 ms refrakter, 360 ms icinde egim karsilastirmali T reddi,
+// 1.66 x RR'de geri arama. Fidusiyel: MWI tepesinin onundeki pencerede
+// gosterim sinyalinin mutlak en buyuk sapmasi (polariteden bagimsiz).
+//
+// legacyPeaks(): eski sabit-esik algoritma; tools/eval_qrs.py karsilastirma
+// tabani olarak kullanir. Sayfada artik cagrilmiyor.
+
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory();
+  else root.QRS = factory();
+}(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // RBJ bant gecis biquad (sabit 0 dB tepe kazanci). f0 merkez, Q = f0 / bant.
+  function biquadBandpass(fs, f0, Q) {
+    const w0 = 2 * Math.PI * f0 / fs, alpha = Math.sin(w0) / (2 * Q);
+    const a0 = 1 + alpha;
+    return { b0: alpha / a0, b1: 0, b2: -alpha / a0,
+             a1: -2 * Math.cos(w0) / a0, a2: (1 - alpha) / a0, z1: 0, z2: 0 };
+  }
+  function biquadRun(c, x) {              // transposed direct form II
+    const y = c.b0 * x + c.z1;
+    c.z1 = c.b1 * x - c.a1 * y + c.z2;
+    c.z2 = c.b2 * x - c.a2 * y;
+    return y;
+  }
+
+  const RING = 1024;                       // >= mwiN + arama payi, her fs icin bol
+
+  class QrsDetector {
+    constructor(fs, opt) {
+      opt = opt || {};
+      this.fs = fs;
+      this.n = 0;                          // islenen ornek sayisi = mutlak indeks
+      this.peaks = [];                     // sirali mutlak fidusiyel indeksleri
+      const f0 = opt.f0 || Math.sqrt(5 * 15), q = opt.q || 0.866;
+      this.bp = biquadBandpass(fs, f0, q);
+      this.bp2 = biquadBandpass(fs, f0, q);         // 2 kademe: 24 dB/oktav etek
+      this.mwiN = Math.max(3, Math.round((opt.mwiSec || 0.150) * fs));
+      this.refr = Math.round((opt.refrSec || 0.200) * fs);
+      this.tWin = Math.round((opt.tSec || 0.360) * fs);
+      this.learnN = Math.round((opt.learnSec || 2.0) * fs);
+      this.searchPad = Math.round(0.030 * fs);   // filtre gecikmesi payi
+
+      this.xin = new Float32Array(RING);   // gosterim sinyali (fidusiyel icin)
+      this.der = new Float32Array(RING);   // |turev| (egim olcusu icin)
+      this.bpAbs = new Float32Array(RING); // |bant gecis| (ikinci esik icin)
+      this.mwi = new Float32Array(RING);
+      this.bpHist = new Float32Array(8);   // turev icin son 5 bp ornegi
+      this.sq = new Float32Array(RING);    // kare, MWI toplami icin
+      this.sqSum = 0;
+
+      this.spk = 0; this.npk = 0; this.thr = 0;          // MWI esigi
+      this.spkF = 0; this.npkF = 0; this.thrF = 0;       // bant gecis esigi
+      this.lastQrs = -1; this.lastSlope = 0;   // lastQrs: fidusiyel (RR icin)
+      this.lastP = -1;                         // son kabul edilen MWI tepesi (refrakter/T icin)
+      this.lastV = 0;                          // son kabul edilen MWI degeri
+      this.undo = null;                        // son kabulden onceki durum (P geri alma icin)
+      this.rr1 = []; this.rr2 = []; this.rrAvg2 = 0;
+      this.learnMax = 0; this.learnSum = 0;
+      this.learnMaxF = 0; this.learnSumF = 0;
+      this.cand = [];                      // lastQrs'den beri reddedilen tepeler
+    }
+
+    // Bir ornek isle. Bu adimda kabul edilen fidusiyelleri (mutlak) dondurur;
+    // geri arama sonucu daha eski bir indeks de gelebilir. this.peaks sirali.
+    push(x) {
+      const i = this.n++, r = i & (RING - 1);
+      this.xin[r] = x;
+
+      const b = biquadRun(this.bp2, biquadRun(this.bp, x));
+      this.bpAbs[r] = Math.abs(b);
+      const h = this.bpHist;
+      h[4] = h[3]; h[3] = h[2]; h[2] = h[1]; h[1] = h[0]; h[0] = b;
+      const d = (2 * h[0] + h[1] - h[3] - 2 * h[4]) / 8;
+      this.der[r] = Math.abs(d);
+      const s = d * d;
+      this.sq[r] = s;
+      this.sqSum += s;
+      if (i >= this.mwiN) this.sqSum -= this.sq[(i - this.mwiN) & (RING - 1)];
+      const m = this.sqSum / this.mwiN;
+      this.mwi[r] = m;
+
+      const out = [];
+      if (i < this.learnN) {
+        if (m > this.learnMax) this.learnMax = m;
+        this.learnSum += m;
+        const bf = this.bpAbs[r];
+        if (bf > this.learnMaxF) this.learnMaxF = bf;
+        this.learnSumF += bf;
+        if (i === this.learnN - 1) {
+          this.spk = this.learnMax / 3;
+          this.npk = this.learnSum / this.learnN / 2;
+          this.spkF = this.learnMaxF / 3;
+          this.npkF = this.learnSumF / this.learnN / 2;
+          this._thr();
+        }
+        return out;
+      }
+
+      // yerel tepe: m[i-1], komsularindan buyuk
+      if (i >= 2) {
+        const p = i - 1;
+        const mp = this.mwi[p & (RING - 1)];
+        if (mp > this.mwi[(i - 2) & (RING - 1)] && mp >= m && mp > 0)
+          this._onPeak(p, mp, out);
+      }
+
+      // geri arama: beklenen RR'nin 1.66 kati gecti, arada aday var mi
+      if (this.lastQrs >= 0 && this.rrAvg2 > 0 &&
+          i - this.lastQrs > 1.66 * this.rrAvg2 && this.cand.length) {
+        let best = null;
+        for (const c of this.cand)
+          if (c.v > 0.5 * this.thr && c.vf > 0.5 * this.thrF && (!best || c.v > best.v)) best = c;
+        if (best) {
+          this.preSpk = this.spk; this.preSpkF = this.spkF;
+          this.spk = 0.25 * best.v + 0.75 * this.spk;
+          this.spkF = 0.25 * best.vf + 0.75 * this.spkF;
+          this._accept(best.p, best.v, best.slope, out);
+        }
+        this.cand = [];
+      }
+      return out;
+    }
+
+    _thr() {
+      this.thr = this.npk + 0.25 * (this.spk - this.npk);
+      this.thrF = this.npkF + 0.25 * (this.spkF - this.npkF);
+    }
+
+    _bpPeakBefore(p) {
+      let mx = 0;
+      const a = Math.max(0, p - this.mwiN);
+      for (let k = a; k <= p; k++) { const v = this.bpAbs[k & (RING - 1)]; if (v > mx) mx = v; }
+      return mx;
+    }
+
+    _slopeBefore(p) {
+      let mx = 0;
+      const a = Math.max(0, p - this.mwiN);
+      for (let k = a; k <= p; k++) { const v = this.der[k & (RING - 1)]; if (v > mx) mx = v; }
+      return mx;
+    }
+
+    _onPeak(p, v, out) {
+      this.preSpk = this.spk; this.preSpkF = this.spkF;   // geri alma icin
+      const slope = this._slopeBefore(p);
+      const vf = this._bpPeakBefore(p);
+      // Onceki tespit zayifti (spk'nin yarisi altinda) ve 360 ms icinde cok daha
+      // buyuk, daha dik bir tepe geldi: onceki buyuk olasilikla P dalgasi ya da
+      // gurultuydu. Geri al, bunu kabul et. (Hamilton-Tompkins T kuralinin aynasi;
+      // "zayif" sarti gercek QRS + buyuk PVC ciftini korur.)
+      if (this.undo && p - this.lastP < this.tWin && this.lastV < 0.5 * this.spk &&
+          v > 2 * this.lastV && slope > this.lastSlope && v > this.thr && vf > this.thrF) {
+        this._undoLast();
+        this.spk = 0.125 * v + 0.875 * this.spk;
+        this.spkF = 0.125 * vf + 0.875 * this.spkF;
+        this._accept(p, v, slope, out);
+        this._thr();
+        return;
+      }
+      if (this.lastP >= 0 && p - this.lastP < this.refr) return;
+      if (v > this.thr && vf > this.thrF) {
+        // T dalgasi: onceki QRS'e 360 ms'den yakin ve egimi onun yarisindan az
+        if (this.lastP >= 0 && p - this.lastP < this.tWin &&
+            slope < 0.5 * this.lastSlope) {
+          this._noise(v, vf);
+          this.cand.push({ p, v, vf, slope });
+        } else {
+          this.spk = 0.125 * v + 0.875 * this.spk;
+          this.spkF = 0.125 * vf + 0.875 * this.spkF;
+          this._accept(p, v, slope, out);
+        }
+      } else {
+        this._noise(v, vf);
+        this.cand.push({ p, v, vf, slope });
+        if (this.cand.length > 64) this.cand.shift();
+      }
+      this._thr();
+    }
+
+    _noise(v, vf) {
+      this.npk = 0.125 * v + 0.875 * this.npk;
+      this.npkF = 0.125 * vf + 0.875 * this.npkF;
+    }
+
+    _undoLast() {
+      const u = this.undo;
+      if (this.peaks.length && this.peaks[this.peaks.length - 1] === this.lastQrs) this.peaks.pop();
+      this.lastQrs = u.lastQrs; this.lastP = u.lastP; this.lastSlope = u.lastSlope; this.lastV = u.lastV;
+      this.rr1 = u.rr1; this.rr2 = u.rr2; this.rrAvg2 = u.rrAvg2;
+      this.spk = u.spk; this.spkF = u.spkF;           // P kabulunun spk'yi asagi cekmesini de geri al
+      this.undo = null;
+    }
+
+    _accept(p, v, slope, out) {
+      // fidusiyel: MWI tepesinin onundeki pencerede gosterim sinyalinin
+      // mutlak en buyuk sapmasi
+      const a = Math.max(0, p - this.mwiN - this.searchPad);
+      let bi = a, bv = -1;
+      for (let k = a; k <= p; k++) {
+        const v = Math.abs(this.xin[k & (RING - 1)]);
+        if (v > bv) { bv = v; bi = k; }
+      }
+      if (this.lastQrs >= 0) {
+        const rr = bi - this.lastQrs;
+        if (rr < this.refr) return;      // geri arama ayni atimi bulmus olabilir
+      }
+      this.undo = { lastQrs: this.lastQrs, lastP: this.lastP, lastSlope: this.lastSlope,
+                    lastV: this.lastV, rr1: this.rr1.slice(), rr2: this.rr2.slice(),
+                    rrAvg2: this.rrAvg2, spk: this.preSpk, spkF: this.preSpkF };
+      if (this.lastQrs >= 0) this._rrUpdate(bi - this.lastQrs);
+      this.lastQrs = bi;
+      this.lastP = p;
+      this.lastV = v;
+      this.lastSlope = slope;
+      this.cand = [];
+      // sirali ekle (geri arama eski indeks getirebilir)
+      let k = this.peaks.length;
+      while (k > 0 && this.peaks[k - 1] > bi) k--;
+      if (k > 0 && this.peaks[k - 1] === bi) return;
+      this.peaks.splice(k, 0, bi);
+      out.push(bi);
+    }
+
+    _rrUpdate(rr) {
+      this.rr1.push(rr); if (this.rr1.length > 8) this.rr1.shift();
+      const avg1 = this.rr1.reduce((a, b) => a + b, 0) / this.rr1.length;
+      const ref = this.rrAvg2 || avg1;
+      if (rr >= 0.92 * ref && rr <= 1.16 * ref) {
+        this.rr2.push(rr); if (this.rr2.length > 8) this.rr2.shift();
+        this.rrAvg2 = this.rr2.reduce((a, b) => a + b, 0) / this.rr2.length;
+      } else if (!this.rrAvg2) {
+        this.rrAvg2 = avg1;
+      }
+    }
+
+    // this.peaks'ten minIdx'ten eskileri at (tarayici 5 dk tampon tutuyor)
+    trim(minIdx) {
+      let k = 0;
+      while (k < this.peaks.length && this.peaks[k] < minIdx) k++;
+      if (k) this.peaks.splice(0, k);
+    }
+
+    // [start, start+n) araligindaki tepeleri goreli indeksle dondur
+    peaksIn(start, n) {
+      const out = [];
+      const P = this.peaks;
+      let lo = 0, hi = P.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (P[mid] < start) lo = mid + 1; else hi = mid; }
+      for (let k = lo; k < P.length && P[k] < start + n; k++) out.push(P[k] - start);
+      return out;
+    }
+  }
+
+  // Eski algoritma: pencere uzerinde ortalama + 1.5 SD sabit esik, yalniz
+  // pozitif tepe, 300 ms refrakter. Yalniz karsilastirma tabani.
+  function legacyPeaks(x, fs) {
+    let m = 0; for (const v of x) m += v; m /= x.length;
+    let sd = 0; for (const v of x) sd += (v - m) * (v - m); sd = Math.sqrt(sd / x.length);
+    if (sd < 1e-6) return [];
+    const th = m + 1.5 * sd, gap = Math.round(0.3 * fs), pk = []; let last = -1e9;
+    for (let i = 1; i < x.length - 1; i++) {
+      if (x[i] > th && x[i] >= x[i - 1] && x[i] > x[i + 1] && i - last > gap) { pk.push(i); last = i; }
+    }
+    return pk;
+  }
+
+  return { QrsDetector, legacyPeaks };
+}));
+
+const FS=256, PXMM=4, HIST=FS*300, AD_GAIN=100;
+const det=new QRS.QrsDetector(FS);   // akis halinde QRS tespiti; det.n === total
+const hF=new Float32Array(HIST), hR=new Float32Array(HIST);
+let head=0, total=0, mmps=25, mmmv=10, lo=1, lastData=0;
+let respRate=null, respConf=0;
+let live=true, anchor=0;              // anchor = mutlak ornek indeksi (pencere basi)
+let dragCanvas=false, dragSlider=false, dragX=0, dragAnchor=0;
+let tool='pan', lastPeaksAbs=[];
+let meas=[], ghost=null, hoverEdge=null, resizing=null;   // olcumler: {t1,t2} mutlak ornek
+let vw={start:0,n:0,w:1600};                              // son cizilen pencere
+const HIT_PX=6;
+let paper=true, epoch0=null, showPT=true;   // ilk ornegin duvar saati (ms)
+let srcStatus='';                            // sunucudan gelen kaynak durumu (BLE: bagli/koptu...)
+const PAL={
+  paper:{bg:'#fffaf8', minor:'#f2c9c4', major:'#e39a92', trace:'#111111',
+         rawTrace:'#9a8f8c', mid:'#d9cdc9', peak:'#111111', cal:'#1f6feb',
+         calFill:'rgba(31,111,235,0.10)', off:'#b9adaa', review:'#1f6feb',
+         axis:'#8a7f7c', calHot:'#0b3d91', label:'rgba(255,255,255,0.92)',
+         rrc:'#8a5a00', tcol:'#6d28d9', pcol:'#0f766e'},
+  mon:  {bg:'#000000', minor:'#2a1214', major:'#5c1f26', trace:'#3fb950',
+         rawTrace:'#484f58', mid:'#21262d', peak:'#e6edf3', cal:'#58a6ff',
+         calFill:'rgba(88,166,255,0.10)', off:'#6e7681', review:'#58a6ff',
+         axis:'#8b949e', calHot:'#ffffff', label:'rgba(13,17,23,0.88)',
+         rrc:'#d29922', tcol:'#a78bfa', pcol:'#2dd4bf'}
+};
+function pal(){ return paper?PAL.paper:PAL.mon; }
+
+function push(f,r){
+  for(let i=0;i<f.length;i++){
+    hF[head]=f[i]; hR[head]=r[i]; head=(head+1)%HIST; total++;
+    det.push(f[i]);
+  }
+  det.trim(total-HIST);
+}
+function nSamples(){ return Math.round(1600/(mmps*PXMM)*FS); }
+function maxAnchor(){ return Math.max(0, total-nSamples()); }
+function startAbs(){ return live ? Math.max(0,total-nSamples()) : anchor; }
+function setAnchor(v){
+  const wasLive=live;
+  anchor=Math.max(0, Math.min(Math.round(v), maxAnchor()));
+  live=false;
+  if(wasLive) setTool('cal');            // duraklayinca olcum modu
+  if(!dragSlider){ posEl.max=maxAnchor(); posEl.value=anchor; }
+  syncPauseLabel();
+}
+function goLive(){ live=true; setTool('pan'); syncPauseLabel(); }
+function setTool(t){
+  tool=t;
+  for(const b of document.getElementById('tool').children)
+    b.classList.toggle('on', b.dataset.v===t);
+  if(typeof applyCursor==='function') applyCursor();
+}
+function syncPauseLabel(){
+  document.getElementById('pause').textContent = live ? 'duraklat' : 'devam';
+}
+function view(buf,startAbsIdx,n){
+  const out=new Float32Array(n);
+  const oldest=Math.max(0,total-HIST);
+  for(let i=0;i<n;i++){
+    const a=startAbsIdx+i;
+    out[i] = (a<oldest||a>=total) ? 0 : buf[((a%HIST)+HIST)%HIST];
+  }
+  return out;
+}
+
+let gridCache=null, gridKey='';
+function gridFor(w,h){
+  const key=w+'x'+h+':'+mmps+':'+(paper?'p':'m');
+  if(gridKey===key) return gridCache;
+  const P=pal();
+  const g=document.createElement('canvas'); g.width=w; g.height=h;
+  const x=g.getContext('2d');
+  x.fillStyle=P.bg; x.fillRect(0,0,w,h);
+  x.strokeStyle=P.minor; x.lineWidth=1; x.beginPath();
+  for(let px=0;px<w;px+=PXMM){const v=Math.round(px)+.5;x.moveTo(v,0);x.lineTo(v,h);}
+  for(let py=h/2;py<h;py+=PXMM){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  for(let py=h/2;py>0;py-=PXMM){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  x.stroke();
+  x.strokeStyle=P.major; x.lineWidth=1.4; x.beginPath();
+  for(let px=0;px<w;px+=PXMM*5){const v=Math.round(px)+.5;x.moveTo(v,0);x.lineTo(v,h);}
+  for(let py=h/2;py<h;py+=PXMM*5){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  for(let py=h/2;py>0;py-=PXMM*5){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  x.stroke();
+  gridCache=g; gridKey=key; return g;
+}
+
+// --- tarayici tarafi sifir fazli on isleme ------------------------------
+// Sunucunun nedensel 0.5 Hz 4. derece yuksek gecireni QRS sonrasi yavas bir
+// cukur birakip T'yi 60-100 ms geciktiriyordu (QTDB sel100: QT +138 ms,
+// T bitisi +155 ms). Burada ham sinyal islenir: iki asamali medyan taban
+// (200/600 ms, de Chazal 2004; sifir faz) + ileri-geri Butterworth 40 Hz
+// alcak geciren ve 49-51 Hz centik (sifir faz). Bedeli: ekran ~0.5 s geriden
+// gelir. Katsayilar sunucuda scipy butter() ile calisan fs icin uretilir.
+const SOS_LP=[[0.021185682953525756, 0.04237136590705151, 0.021185682953525756, 1.0, -0.6284099332330609, 0.13110799658499456], [1.0, 2.0, 1.0, 1.0, -0.8429291415944101, 0.517232370447516]], SOS_NOTCH=[[0.9378705880589456, -0.6321085491010657, 0.9378705880589459, 1.0, -0.6416292399126563, 0.955503993170493], [1.0, -0.6739826977720911, 1.0000000000000002, 1.0, -0.6763311193270473, 0.9557957038635742], [1.0, -0.6739826977720911, 1.0000000000000002, 1.0, -0.625020601057584, 0.981246070624731], [1.0, -0.6739826977720911, 1.0000000000000002, 1.0, -0.7097255425140242, 0.9815452411349321]];
+const ZP_H1=Math.round(0.10*FS), ZP_H2=Math.round(0.30*FS);   // medyan yarim pencereleri
+const ZP_G=Math.round(0.12*FS), ZP_M=Math.round(0.40*FS);      // IIR gecis payi: uc / bas
+const zpRaw=new Float32Array(HIST), zpM1=new Float32Array(HIST), zpY=new Float32Array(HIST);
+let zpN=0, zpM1N=0, zpYN=0;      // ham / 1. medyan / taban-cikarilmis: hesaplanan ornek sayisi
+const zpAt=(buf,i)=>buf[((i%HIST)+HIST)%HIST];
+function medWin(buf,c,h,n){      // buf[c-h..c+h] medyani; n ust sinir, kenarda kirpar
+  const a=Math.max(0,c-h), b=Math.min(n-1,c+h), tmp=new Array(b-a+1);
+  for(let i=a;i<=b;i++) tmp[i-a]=zpAt(buf,i);
+  tmp.sort((x,y)=>x-y); const m=tmp.length>>1;
+  return tmp.length%2 ? tmp[m] : (tmp[m-1]+tmp[m])/2;
+}
+function sosBlock(sos,x){        // sifir durum; DC'ye gore calisir: x0 cikar, sonra ekle
+  const n=x.length, out=new Float32Array(n), st=sos.map(()=>[0,0]), x0=x[0];
+  for(let k=0;k<n;k++){
+    let y=x[k]-x0;
+    for(let i=0;i<sos.length;i++){
+      const c=sos[i], s=st[i], yn=c[0]*y+s[0];
+      s[0]=c[1]*y-c[4]*yn+s[1]; s[1]=c[2]*y-c[5]*yn; y=yn;
+    }
+    out[k]=y+x0;
+  }
+  return out;
+}
+function filtfilt(sos,x){ return sosBlock(sos, sosBlock(sos,x).reverse()).reverse(); }
+// Yeni ham ornekler: taban cikar, sifir fazli filtrele, hazir olanlari push() ile yayinla.
+function zpFeed(raw){
+  for(const v of raw){ zpRaw[zpN%HIST]=v; zpN++; }
+  while(zpM1N+ZP_H1<zpN){ zpM1[zpM1N%HIST]=medWin(zpRaw,zpM1N,ZP_H1,zpN); zpM1N++; }
+  while(zpYN+ZP_H2<zpM1N){ zpY[zpYN%HIST]=zpAt(zpRaw,zpYN)-medWin(zpM1,zpYN,ZP_H2,zpM1N); zpYN++; }
+  const emitTo=zpYN-ZP_G;                       // IIR uc gecisi disinda kalanlar
+  if(emitTo<=total) return;
+  const a=Math.max(0,total-ZP_M), blk=new Float32Array(zpYN-a);
+  for(let i=a;i<zpYN;i++) blk[i-a]=zpAt(zpY,i);
+  const y=filtfilt(SOS_NOTCH, filtfilt(SOS_LP, blk));
+  const f=[], r=[];
+  for(let i=total;i<emitTo;i++){ f.push(y[i-a]); r.push(zpAt(zpRaw,i)); }
+  push(f,r);
+}
+
+// --- kayit ------------------------------------------------------------------
+// Tarayici tamponu 5 dk ile sinirli; kayit ayri ve sinirsiz buyuyen dizide tutulur.
+// Cikti t_us,ecg_mv,lo — capture_serial.py ile ayni bicim, plot_ecg.py okuyabilir.
+let recOn=false, recRaw=[], recLo=[], recT0=null, recStartAbs=0;
+
+function recToggle(){
+  recOn = !recOn;
+  const b=document.getElementById('rec');
+  if(recOn){
+    recRaw=[]; recLo=[]; recT0=new Date(); recStartAbs=total;
+    b.textContent='■ kaydı durdur'; b.classList.add('on');
+    document.getElementById('dl').disabled=true;
+  } else {
+    b.textContent='● kayıt başlat'; b.classList.remove('on');
+    document.getElementById('dl').disabled = recRaw.length===0;
+  }
+  updateRecStat();
+}
+function recFeed(raw, lo){
+  if(!recOn) return;
+  for(let i=0;i<raw.length;i++){ recRaw.push(raw[i]); recLo.push(lo); }
+}
+function updateRecStat(){
+  const el=document.getElementById('recstat');
+  if(!recRaw.length){ el.textContent=''; return; }
+  const sec=recRaw.length/FS;
+  const mb=(recRaw.length*12/1e6).toFixed(1);
+  el.textContent=(recOn?'● kaydediyor  ':'')
+    + `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`
+    + `  ${recRaw.length} örnek  ~${mb} MB`;
+}
+function recDownload(){
+  if(!recRaw.length) return;
+  const pad=(v,n)=>String(v).padStart(n,'0');
+  const d=recT0;
+  const stamp=`${d.getFullYear()}${pad(d.getMonth()+1,2)}${pad(d.getDate(),2)}`
+            + `-${pad(d.getHours(),2)}${pad(d.getMinutes(),2)}${pad(d.getSeconds(),2)}`;
+  const parts=[
+    `# ecg-recorder tarayici kaydi
+`,
+    `# baslangic: ${d.toISOString()}
+`,
+    `# fs=${FS} Hz, ecg_mv = AD8232 cikisi (ADC mV, kalibre degil)
+`,
+    `t_us,ecg_mv,lo
+`
+  ];
+  const CH=20000;                                   // parca parca: tek string RAM'i patlatir
+  for(let a=0;a<recRaw.length;a+=CH){
+    let buf='';
+    for(let i=a;i<Math.min(a+CH,recRaw.length);i++)
+      buf += `${Math.round(i/FS*1e6)},${Math.round(recRaw[i])},${recLo[i]}
+`;
+    parts.push(buf);
+  }
+  const url=URL.createObjectURL(new Blob(parts,{type:'text/csv'}));
+  const a=document.createElement('a');
+  a.href=url; a.download=`ecg-${stamp}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+// --- canli on degerlendirme ---------------------------------------------
+// 30 sn'lik kayan pencereden ritim olculur. Once sinyal kalitesi bakilir;
+// kalite yetersizse hicbir yorum uretilmez (gurultuyu aritmi sanmamak icin).
+const INTERP_WIN = 30;   // AF kurali YALNIZ 30 sn'de olculdu; 15 sn'de RSA
+                         // kapisi AF'yi solunumsal saniyor (Se %90.5 -> %59.0)
+const AF_CV = 0.11, AF_PNN50 = 0.50;   // CPSC 2021'de ayarlandi, bkz PROJECT_PLAN
+let interpRows = [], interpQual = null, interpAt = 0, interpWinTxt = '';
+
+function pearson(a,b,n){
+  let ma=0,mb=0;
+  for(let i=0;i<n;i++){ ma+=a[i]; mb+=b[i]; }
+  ma/=n; mb/=n;
+  let num=0,da=0,db=0;
+  for(let i=0;i<n;i++){ const x=a[i]-ma, y=b[i]-mb; num+=x*y; da+=x*x; db+=y*y; }
+  const d=Math.sqrt(da*db);
+  return d>1e-12 ? num/d : 0;
+}
+// Orphanidou ve ark. 2015, IEEE JBHI 19:832 — atimlarin ortalama sablonla korelasyonu.
+// Esik 0.66 (Se %94 / Sp %97, CinC 2011 lead-I verisinde turetilmis).
+// Pearson r olcekten ve ofsetten bagimsiz -> kalibre olmayan genlikte gecerli kalir.
+// Fark: yayindaki ORTALAMA yerine MEDYAN kullaniyorum; birkac ektopik atim
+// otherwise temiz bir seridi dusurmesin (raporun onerdigi duzeltme).
+function templateSQI(f, pk){
+  if(pk.length < 5) return {r:0, n:0};
+  const rrs=[]; for(let i=1;i<pk.length;i++) rrs.push(pk[i]-pk[i-1]);
+  const w = Math.max(8, Math.round(median(rrs))), half = w>>1;
+  const beats=[];
+  for(const p of pk){
+    const a=p-half;
+    if(a<0 || a+w>f.length) continue;
+    beats.push(f.subarray(a, a+w));
+  }
+  if(beats.length < 3) return {r:0, n:beats.length};
+  const tpl=new Float64Array(w);
+  for(const b of beats) for(let i=0;i<w;i++) tpl[i]+=b[i];
+  for(let i=0;i<w;i++) tpl[i]/=beats.length;
+  return {r: median(beats.map(b=>pearson(b,tpl,w))), n: beats.length};
+}
+function kurtosis(x){          // Pearson basiklik: normal=3, EKG>5
+  const n=x.length; let m=0; for(const v of x) m+=v; m/=n;
+  let s2=0,s4=0;
+  for(const v of x){ const d=v-m; s2+=d*d; s4+=d*d*d*d; }
+  s2/=n; s4/=n;
+  return s2>1e-12 ? s4/(s2*s2) : 0;
+}
+function mad(x){
+  const m = median(x), d = x.map(v=>Math.abs(v-m));
+  return 1.4826*median(d);
+}
+
+function computeInterp(endAbs){
+  const n = Math.round(INTERP_WIN*FS);
+  const start = Math.max(Math.max(0,total-HIST), endAbs-n);
+  const len = endAbs-start;
+  if(len < 10*FS) return {q:null, rows:[[' ','veri birikiyor…','']]};
+
+  const f = view(hF, start, len);
+  const {pk} = calcPeaks(start, len);
+  const noise = mad(Array.from(f)) || 1e-9;
+
+  // --- kalite ---
+  // kSQI: Pearson basikligi > 5  (Li, Mark & Clifford 2008, Physiol Meas 29:15-32)
+  //   "Normal ECG generally has a kurtosis larger than 5; muscle artifact ~5,
+  //    baseline wander and power-line interference lower than 5"
+  // Diger olculer (SNR, genlik CV) literaturden DEGIL — kendi sezgisel esiklerim.
+  // sSQI uygulanmadi: yayindaki 5-50 Hz bandi bizim 0.5-40 Hz on ucumuzle ortusmuyor,
+  // esik degerleri gecerli olmaz.
+  const beats = pk.length;
+  const expMin = Math.floor(len/FS*0.4);          // >=24/dk
+  const amps = pk.map(i=>Math.abs(f[i]));
+  const ampMean = amps.length ? amps.reduce((a,v)=>a+v,0)/amps.length : 0;
+  const ampCV = amps.length>2
+    ? Math.sqrt(amps.reduce((a,v)=>a+(v-ampMean)**2,0)/amps.length)/ampMean : 1;
+  const snr = amps.length ? median(amps)/noise : 0;
+  const kurt = kurtosis(Array.from(f));
+  // kSQI: Li 2008'de esik >5. Ama Rahman 2022 (J R Soc Interface 19:20220012)
+  // alti veri setinde ozgullugu %0,54-89,95 arasi bulmus -> sabit esik tasinmiyor.
+  // Bu yuzden kapi olarak DEGIL, yalnizca "gurultulu" isareti olarak kullaniliyor.
+  const kSQI = kurt > 5;
+  const tsqi = templateSQI(f, pk);
+
+  // Orphanidou Kural 1-2 (yayindan): hiz 40-180/dk, en buyuk RR boslugu <=3 sn.
+  // Kural 3 (max/min RR < 2.2) UYGULANMIYOR — AF'yi tanim geregi reddeder.
+  const rrAll=[]; for(let i=1;i<pk.length;i++) rrAll.push((pk[i]-pk[i-1])/FS);
+  const maxGap = rrAll.length ? Math.max(...rrAll) : 99;
+  const hrRough = rrAll.length ? 60/median(rrAll) : 0;
+
+  let q='iyi', qc='f-ok';
+  if(lo && live){ q='elektrot yok'; qc='f-bad'; }
+  else if(beats < expMin || maxGap > 3.0 || hrRough < 40 || hrRough > 180){
+    q='değerlendirilemez'; qc='f-bad';
+  }
+  else if(tsqi.r < 0.66){ q='değerlendirilemez'; qc='f-bad'; }   // Orphanidou 2015
+  else if(tsqi.r < 0.80 || snr < 8 || ampCV > 0.45 || !kSQI){ q='gürültülü'; qc='f-warn'; }
+
+  if(q==='elektrot yok' || q==='değerlendirilemez')
+    return {q, qc, rows:[[' ','Sinyal kalitesi yorum için yetersiz — hiçbir ritim çıkarımı yapılmadı.',
+             `şablon r ${tsqi.r.toFixed(2)} (>0,66 gerekli, Orphanidou 2015) · `
+             + `R tepesi ${beats} · en uzun RR ${maxGap.toFixed(1)} sn · kSQI ${kurt.toFixed(1)}`]]};
+
+  // --- RR olculeri ---
+  const rr = [];
+  for(let i=1;i<pk.length;i++) rr.push((pk[i]-pk[i-1])/FS*1000);
+  const good = rr.filter(v=>v>250 && v<3000);
+  if(good.length < 4)
+    return {q, qc, rows:[[' ','Yeterli atım yok.', `${good.length} RR`]]};
+
+  const med = median(good);
+  const mean = good.reduce((a,v)=>a+v,0)/good.length;
+  const sd = Math.sqrt(good.reduce((a,v)=>a+(v-mean)**2,0)/(good.length-1));
+  const cv = sd/mean;
+  let sq=0, nn50=0;
+  for(let i=1;i<good.length;i++){ const d=good[i]-good[i-1]; sq+=d*d; if(Math.abs(d)>50) nn50++; }
+  const rmssd = Math.sqrt(sq/(good.length-1));
+  const pnn50 = nn50/(good.length-1);
+  const hr = 60000/med;
+
+  // --- P gorunurlugu ve P-QRS iliskisi ---
+  const pt = detectPT(f, pk), {P:Pw, pAmp:pAmps} = pt;
+  const pAmp = pAmps.length ? median(pAmps) : 0;   // tabana gore, sifira gore degil
+  const tAmpMed = pt.tAmp.length ? median(pt.tAmp) : 0;
+  // her P'yi kendinden sonraki ilk R'ye esle -> P-R tepe araligi
+  const prList=[];
+  for(const pi of Pw){
+    const r = pk.find(v=>v>pi);
+    if(r!==undefined){ const d=(r-pi)/FS*1000; if(d>60 && d<400) prList.push(d); }
+  }
+  const prMed = prList.length ? median(prList) : null;
+  const prMean = prList.length ? prList.reduce((a,v)=>a+v,0)/prList.length : 0;
+  const prSD = prList.length>2
+    ? Math.sqrt(prList.reduce((a,v)=>a+(v-prMean)**2,0)/(prList.length-1)) : 999;
+  const pRatio = pk.length ? Pw.length/pk.length : 0;
+  const pVisible = pRatio >= 0.6 && pAmp > 2.5*noise;
+  const oneToOne = pVisible && pRatio >= 0.8 && prSD < 40;   // her QRS'in kendi P'si
+
+  // --- duzensizlik solunumsal mi? (RSA benign, AF degil) ---
+  let respLinked = false;
+  if(rr.length >= 8 && cv > 0.05){
+    // RR serisini kendi ortalamasindan arindirip periyodikligini bak:
+    // solunumsal degisim 0.1-0.5 Hz'de duzenli salinim yapar, AF yapmaz.
+    const x = good.map(v=>v-mean);
+    let best=0;
+    const dtm = mean/1000;                        // atim basina ~saniye
+    for(let lagS=2.0; lagS<=8.0; lagS+=0.5){      // 7.5-30 soluk/dk
+      const L=Math.round(lagS/dtm);
+      if(L<2 || L>=x.length-2) continue;
+      let num=0,d1=0,d2=0;
+      for(let i=0;i+L<x.length;i++){ num+=x[i]*x[i+L]; d1+=x[i]*x[i]; d2+=x[i+L]*x[i+L]; }
+      const r=num/Math.sqrt(d1*d2||1);
+      if(r>best) best=r;
+    }
+    respLinked = best > 0.45;                     // RR salinimi periyodik
+  }
+  // --- olaylar ---
+  // Esikler PhysioNet/CinC 2015 alarm tanimlarindan:
+  //   asistoli = 4 sn boyunca QRS yok · ileri bradikardi = 5 ardisik atimda HR<40
+  // Not: 'pause' adini kullanma — <button id="pause"> global degiskene cozuluyor.
+  // Kademeli duraklama tanimi, her esik bir kaynaga bagli:
+  //   >2.5 s  saglikli kisilerde seyrek, tek basina patoloji degil   (ESC 2021)
+  //   >3.0 s  sinus duraklamasi tanimi                (ACC/AHA/HRS 2018 Tablo 3)
+  //   >=4 s   asistoli                                       (PhysioNet/CinC 2015)
+  // "RR > 2x onceki RR" kurali KULLANILMIYOR: hicbir kaynakta bulunamadi.
+  let premCount=0, pause25=0, pause30=0, maxRRms=0, asystole=false;
+  for(let i=0;i<good.length;i++){
+    if(good[i]>maxRRms) maxRRms=good[i];
+    if(good[i] >= 4000) asystole=true;
+    else if(good[i] > 3000) pause30++;
+    else if(good[i] > 2500) pause25++;
+    if(good[i] < 0.85*med && i+1<good.length && good[i+1] > 1.15*med) premCount++;
+  }
+  let extremeBrady=false;                       // 5 ardisik atim HR<40  (RR>1500 ms)
+  for(let i=0;i+4<good.length;i++)
+    if(good.slice(i,i+5).every(v=>v>1500)) { extremeBrady=true; break; }
+
+  const rows=[];
+  rows.push(['sinyal', q==='gürültülü' ? 'gürültülü — bulgular temkinli değerlendirilmeli' : 'kabul edilebilir',
+    `şablon r ${tsqi.r.toFixed(2)} · kSQI ${kurt.toFixed(1)} · SNR ${snr.toFixed(1)} · ${tsqi.n} atım`]);
+  const hrTag = hr<50?'belirgin bradikardi':hr<60?'bradikardi':hr>120?'belirgin taşikardi':hr>100?'taşikardi':'normal hız';
+  rows.push(['hız', `${hr.toFixed(0)}/dk — ${hrTag}`, `RR medyan ${med.toFixed(0)} ms`]);
+
+  const regTag = cv<0.05?'düzenli':cv<0.10?'hafif düzensiz':cv<0.15?'düzensiz':'belirgin düzensiz';
+  rows.push(['ritim', regTag,
+    `CV %${(cv*100).toFixed(1)} · SD ${sd.toFixed(0)} ms · RMSSD ${rmssd.toFixed(0)} ms · pNN50 %${(pnn50*100).toFixed(0)}`]);
+
+  // --- ritim adlandirma: pozitif olcutlerle, sadece "digerleri degil" diye degil ---
+  // Hiz kapisi: Apple Watch EKG kullanim kilavuzu tek-derivasyonda HR<50 veya
+  // HR>150 oldugunda ritim siniflandirmayi reddediyor. Ayni siniri benimsiyoruz.
+  const rateOK = hr >= 50 && hr <= 150;
+  let name=null, nameEv='', nameKey='değerlendirme';
+  if(!rateOK){
+    name = 'ritim sınıflandırılmadı';
+    nameEv = `hız ${hr.toFixed(0)}/dk — sınıflandırma aralığı dışında (50–150/dk)`;
+  } else if(oneToOne && cv < 0.10){
+    name = hr<60 ? 'sinüs bradikardisi ile uyumlu'
+         : hr>100 ? 'sinüs taşikardisi ile uyumlu'
+         : 'normal sinüs ritmi ile uyumlu';
+    nameEv = `her QRS öncesi P · P-R tepe ${prMed.toFixed(0)} ms (SD ${prSD.toFixed(0)}) · RR CV %${(cv*100).toFixed(1)}`;
+  } else if(rateOK && oneToOne && respLinked){
+    name = 'sinüs aritmisi ile uyumlu';
+    nameEv = `P-QRS 1:1 · RR değişimi solunumla döngüsel · CV %${(cv*100).toFixed(1)}`;
+  } else if(rateOK && oneToOne){
+    name = 'P-QRS ilişkisi korunmuş, RR düzensiz';
+    nameEv = `P-R tepe SD ${prSD.toFixed(0)} ms · CV %${(cv*100).toFixed(1)}`;
+  } else if(rateOK && !pVisible && cv>AF_CV){
+    name = 'P seçilemiyor, ritim düzensizce düzensiz';
+    nameEv = 'ayırıcı tanı gerekir — aşağıya bak';
+  }
+  if(name) rows.push([nameKey, name, nameEv]);
+  if(name && name.indexOf('sinüs')>=0)
+    rows.push(['sınır','Atriyal flutter bu cihazla dışlanamaz.',
+      'Lead I atriyal vektöre dik — flutter dalgası ~70 µV, gürültü tabanında']);
+
+  rows.push(['P dalgası',
+    oneToOne ? 'her QRS öncesi, sabit aralıkta'
+             : pVisible ? 'kısmen seçiliyor, ilişki tutarsız' : 'seçilemiyor',
+    `${Pw.length}/${pk.length} atım · ${(pAmp/noise).toFixed(1)}× gürültü`
+    + (prMed!==null ? ` · P-R tepe ${prMed.toFixed(0)}±${prSD.toFixed(0)} ms` : '')]);
+
+  // --- dalga sinirlari ve araliklar ---
+  // Sinirlar: QRS turev zarfi (Laguna 1994), P egim orani (Martinez 2004),
+  // T bitisi trapez alan (Vazquez-Seisdedos 2011). QTDB sel100 dogrulamasi:
+  // QT +7+-17 ms, PR +4+-12, QRS -9+-6, T bitisi +11+-16 (CSE 2 sigma 30.6).
+  // QTc: Fridericia birincil (AHA/ACCF/HRS 2009 Bazett'i onermiyor), Bazett bilgi icin.
+  const del = delineate(f, pk, pt), iv = intervalStats(del);
+  const tLow = tAmpMed < 10;                        // T <0.10 mV: gurultu/U ile karisir
+  const ivTxt = o => o ? `${o.med.toFixed(0)}${o.sd!==null?'±'+o.sd.toFixed(0):''} ms` : '—';
+  if(iv.pr || iv.qrs || iv.qt){
+    if(iv.pr) rows.push(['PR',
+      ivTxt(iv.pr) + (iv.pr.med<120?' — kısa (<120)':iv.pr.med>200?' — uzun (>200)':' — normal'),
+      `P başlangıcı → QRS başlangıcı · ${iv.pr.n} atım`]);
+    if(iv.qrs) rows.push(['QRS süresi',
+      ivTxt(iv.qrs) + (iv.qrs.med>=120?' — geniş (≥120)':' — normal'),
+      `türev zarfı · ${iv.qrs.n} atım`]);
+    if(tLow)                                      // gurultu duzeyinde T'den QT olcme
+      rows.push(['QT / QTc', 'ölçülmedi — T genliği düşük',
+        `T tepe genliği ${(tAmpMed/AD_GAIN).toFixed(2)} mV (<0,10) · T/U ayrımı güvenilmez`]);
+    else if(iv.qt){
+      const F=iv.qtcF, B=iv.qtcB;
+      const tag = !F ? '' : F.med>=500?' — belirgin uzun (≥500)':F.med>=460?' — uzun (≥460)':F.med<=340?' — kısa (≤340)':' — normal';
+      rows.push(['QT / QTc', `${ivTxt(iv.qt)} · QTc ${F?F.med.toFixed(0):'—'}${tag}`,
+        `Fridericia ${F?F.med.toFixed(0):'—'} · Bazett ${B?B.med.toFixed(0):'—'} · T bitişi trapez alan · ${iv.qt.n} atım`]);
+    }
+    if(iv.pdur) rows.push(['P süresi',
+      ivTxt(iv.pdur) + (iv.pdur.med>=120?' — uzun (≥120)':' — normal'), `${iv.pdur.n} atım`]);
+    if(iv.tpe && !tLow) rows.push(['Tp-Te',
+      ivTxt(iv.tpe) + (iv.tpeRatio!==null?` · Tp-Te/QT ${iv.tpeRatio.toFixed(2)}`:''),
+      `T tepesi → T bitişi · referans oran 0,25–0,30 · ${iv.tpe.n} atım` + (iv.tpe.med>100?' · >100 ms':'')]);
+  }
+
+  if(premCount) rows.push(['erken atım', `${premCount} adet`,
+    'kısa RR + kompanzatuar duraklama — sık ektopide düzensizlik AF ile karışır']);
+  if(pause30) rows.push(['duraklama', `${pause30} adet >3 sn`,
+    `en uzun RR ${maxRRms.toFixed(0)} ms · sinüs duraklaması tanımı (ACC/AHA 2018)`]);
+  else if(pause25) rows.push(['uzun RR', `${pause25} adet 2,5–3 sn`,
+    'sağlıklı kişilerde seyrek, tek başına patoloji değil (ESC 2021)']);
+  if(asystole) rows.push(['uyarı','≥4 sn QRS saptanmadı',
+    'asistoli tanımı (CinC 2015) — tek derivasyonda yanlış alarm oranı yüksek, doğrula']);
+  if(extremeBrady) rows.push(['uyarı','5 ardışık atımda hız <40/dk',
+    'ileri bradikardi tanımı (CinC 2015)']);
+
+  // --- birlesik ipucu, tanisal dil kullanmadan ---
+  // Flutter tuzagi: 4:1 iletili flutter ~75/dk, duzenli ve 50-100 araliginda —
+  // "sinus ritmi" olarak okunur. Yayinlanmis vaka: Apple Watch 75/dk'da sinus dedi,
+  // ayni gun 12 derivasyon tipik flutter gosterdi (Ratti 2026, Future Cardiol).
+  // Lead I'de flutter dalgasi ~70 uV ve eksene dik — 20 hekim 500 okumada %11,6
+  // dogru bilmis (Avidan 2025, CJC Open). Bu cihaz flutter'i DISLAYAMAZ.
+  if(rateOK && cv < 0.10){
+    const twoToOne  = hr >= 130 && hr <= 175;   // 260-350/dk atriyal, 2:1
+    const fourToOne = hr >= 62  && hr <= 88;    // 248-352/dk atriyal, 4:1
+    if(twoToOne || fourToOne)
+      rows.push(['dikkat',
+        `Düzenli ritim, hız ${hr.toFixed(0)}/dk — ${twoToOne?'2:1':'4:1'} iletili atriyal flutter bu hızda sinüs gibi görünür.`,
+        'tek derivasyonda ayırt edilemez, 12 derivasyonlu EKG ile dışla']);
+  }
+
+  // AF esikleri CPSC 2021'in tamaminda olculdu (tools/eval_af.py): 1425 kayit,
+  // 105 hasta, 56881 pencere, 30 sn, lead II, atak anotasyonu. Esikler cift hasta
+  // numarasinda ayarlandi, TEK hasta numarasinda sinandi (ayri hastalar):
+  //   CV>0.11 + pNN50>0.50  ->  Se %93.3 / Sp %93.2 / PPV %89.2
+  //   CV>0.13 + pNN50>0.50  ->  Se %90.5 / Sp %93.2   (bir onceki ayar)
+  //   CV>0.15 + pNN50>0.30  ->  Se %79.6 / Sp %90.4   (eski, kaynaksiz secimim)
+  // RSA reddi 0.45 -> 0.55 yapilirsa Se %96.0 ama Sp %92.1 / PPV %88.0; ayni esik
+  // ritim adlandirmasinda da kullanildigi icin degistirilmedi (bkz PROJECT_PLAN).
+  if(rateOK && cv>AF_CV && pnn50>AF_PNN50 && !pVisible && !respLinked)
+    rows.push(['dikkat','Düzensizce düzensiz ritim, P seçilemiyor.',
+               'AF açısından 12 derivasyonlu EKG ile değerlendirilmeli']);
+  else if(cv>0.15 && respLinked)
+    rows.push(['not','RR düzensizliği solunumla döngüsel.',
+               'sinüs aritmisi lehine — AF paterni değil']);
+  else if(cv>0.15)
+    rows.push(['dikkat','Belirgin RR düzensizliği.','kaynağı ayırt edilemez — artefakt olabilir']);
+  if(hr<40 || hr>150)
+    rows.push(['dikkat', hr<40?'Çok yavaş hız.':'Çok hızlı ritim.','ölçümü doğrula']);
+
+  return {q, qc, rows};
+}
+
+function renderInterp(){
+  const el=document.getElementById('ilist');
+  el.innerHTML = interpRows.map(([k,v,ev])=>
+    `<li><span class="k">${k}</span><span class="v">${v}`
+    + (ev?` <span class="ev">${ev}</span>`:'') + `</span></li>`).join('');
+  const qe=document.getElementById('iq');
+  qe.textContent = interpQual ? ('sinyal: '+interpQual.q) : 'bekleniyor';
+  qe.className = 'flag ' + (interpQual ? interpQual.qc : 'f-warn');
+  document.getElementById('iwin').textContent = interpWinTxt;
+}
+
+function boxSmooth(x,w){
+  const n=x.length, out=new Float32Array(n), cs=new Float64Array(n+1), h=w>>1;
+  for(let i=0;i<n;i++) cs[i+1]=cs[i]+x[i];
+  for(let i=0;i<n;i++){
+    const a=Math.max(0,i-h), b=Math.min(n,i+h+1);
+    out[i]=(cs[b]-cs[a])/(b-a);
+  }
+  return out;
+}
+const oddW=s=>Math.max(3, Math.round(s*FS)|1);
+function medRange(x,a,b){
+  a=Math.max(0,Math.round(a)); b=Math.min(x.length,Math.round(b));
+  if(b-a<3) return null;
+  const seg=new Array(b-a);
+  for(let i=a;i<b;i++) seg[i-a]=x[i];
+  return median(seg);
+}
+// Pencere icinde dalga sec. Genlik sifira degil izoelektrik tabana (baseAt)
+// gore olculur; polarite tek nokta genligiyle degil ALAN ile secilir. T ve P
+// genis dalgalardir, ST/TP uzerindeki dar centik alanda kaybeder. Kaba yer
+// agir duzlestirilmis sinyalde bulunur, apeks hafif sinyalde ince ayarlanir.
+function pickWave(coarse,fine,a,b,ref,baseAt,forcePol){
+  a=Math.max(0,Math.round(a)); b=Math.min(coarse.length,Math.round(b));
+  if(b-a<3) return null;
+  if(!baseAt){                                               // capa yoksa: pencere medyani
+    const m=medRange(coarse,a,b);
+    if(m===null) return null;
+    baseAt=()=>m;
+  }
+  let ap=0, an=0;
+  for(let i=a;i<b;i++){ const d=coarse[i]-baseAt(i); if(d>0) ap+=d; else an-=d; }
+  const s = forcePol || (ap>=an ? 1 : -1);                   // baskin polarite
+  const vote = ap-an;                                        // atim oyu (pencere geneli icin)
+  let bi=-1, bv=-Infinity;
+  for(let i=a;i<b;i++){ const v=s*(coarse[i]-baseAt(i)); if(v>bv){ bv=v; bi=i; } }
+  if(bi<0) return null;
+  const ra=Math.max(a,bi-ref), rb=Math.min(b,bi+ref+1);      // apeksi keskinlestir
+  let fi=bi, fv=-Infinity;
+  for(let i=ra;i<rb;i++){ const v=s*(fine[i]-baseAt(i)); if(v>fv){ fv=v; fi=i; } }
+  return {i:fi, amp:Math.abs(fine[fi]-baseAt(fi)), pol:s, vote};
+}
+// T icin lob secimi. Pencerede tabana gore ayni isaretli her kosu bir lob;
+// skor = alan * w(lob bitisi). w, lobun bitisinin ima ettigi Bazett-QTc'ye
+// gore: 0.32..0.47 s arasi 1, disina cikinca Gauss ile duser (erken: sigma
+// 0.08 s -> ST cokmesi lobu, ama centikle kesilmis erken T yine kazanir;
+// gec: sigma 0.06 s -> T'den sonraki U dalgasi ya da sonraki P'ye uzanan plato). QTc 0.52 s'de w~0.5: uzun QT'de genis T
+// yine kazanir, ama QTc 0.6+ ima eden U platosu (QTDB sel100) kaybeder.
+// forcePol verilirse o isaretli loblar arasinda secim; vote = isaret*skor.
+function pickLobe(coarse,fine,a,b,ref,baseAt,r,rrS,forcePol){
+  a=Math.max(0,Math.round(a)); b=Math.min(coarse.length,Math.round(b));
+  if(b-a<3 || !baseAt) return null;
+  const lobes=[]; let cur=null;
+  for(let i=a;i<b;i++){
+    const d=coarse[i]-baseAt(i), sg=d>0?1:(d<0?-1:0);
+    if(!sg) continue;
+    if(!cur || cur.s!==sg){ cur={s:sg,area:0,pk:i,pv:0,end:i}; lobes.push(cur); }
+    const v=Math.abs(d); cur.area+=v; cur.end=i; if(v>cur.pv){ cur.pv=v; cur.pk=i; }
+  }
+  if(!lobes.length) return null;
+  const k=1/Math.sqrt(Math.max(rrS,0.3));
+  for(const L of lobes){
+    const qtc=(L.end-r)/FS*k;                                // lob bitisinin ima ettigi QTc (s)
+    const late=qtc-0.47, early=0.32-qtc;
+    L.score=L.area*(late>0 ? Math.exp(-(late/0.06)*(late/0.06))
+                  : early>0 ? Math.exp(-(early/0.08)*(early/0.08)) : 1);
+  }
+  let best=null;
+  for(const L of lobes) if(!best || L.score>best.score) best=L;
+  const vote=best.s*best.score;
+  if(forcePol && best.s!==forcePol){
+    best=null;
+    for(const L of lobes) if(L.s===forcePol && (!best || L.score>best.score)) best=L;
+    if(!best) return null;
+  }
+  const s=best.s, bi=best.pk;
+  const ra=Math.max(a,bi-ref), rb=Math.min(b,bi+ref+1);      // apeksi keskinlestir
+  let fi=bi, fv=-Infinity;
+  for(let i=ra;i<rb;i++){ const v=s*(fine[i]-baseAt(i)); if(v>fv){ fv=v; fi=i; } }
+  return {i:fi, amp:Math.abs(fine[fi]-baseAt(fi)), pol:s, vote};
+}
+// R capa; T = R sonrasi pencere, P = bir sonraki R oncesi pencere.
+// Pencereler RR ile olceklenir, fizyolojik sinirlarla kirpilir.
+function detectPT(f,pk){
+  const T=[], Pw=[], tA=[], pA=[], beats=[];   // beats[i]: R=pk[i], t=T'si, p=SONRAKI R'nin P'si
+  if(pk.length<2) return {T,P:Pw,tAmp:tA,pAmp:pA,beats,smP:null};
+  const wT=oddW(0.03);
+  const smT=boxSmooth(boxSmooth(f,wT),wT);                   // ~60 ms: T genis
+  const smP=boxSmooth(f,oddW(0.028));                        // ~28 ms: P daha dar
+  const ref=Math.round(0.024*FS);                            // apeks ince ayar +-24 ms
+  const rrs=[]; for(let i=1;i<pk.length;i++) rrs.push(pk[i]-pk[i-1]);
+  const rrMed=median(rrs);
+  const cl=(v,lo,hi)=>Math.round(Math.max(lo,Math.min(hi,v)));
+  // Izoelektrik capa: PR segmenti (R-80..R-30 ms). Yuksek gecirgen filtrenin
+  // QRS sonrasi yavas kuyrugu ST'yi asagi ceker; ardisik iki atimin PR
+  // seviyesi dogruyla birlestirilerek bu kayma ve taban surüklenmesi cikarilir.
+  const j0=Math.round(0.08*FS), j1=Math.round(0.03*FS), ja=Math.round(0.055*FS);
+  const iso=pk.map(r=>medRange(smT, r-j0, r-j1));
+  const lineAt=(i,nr)=>{
+    const v0=iso[i]; if(v0===null||v0===undefined) return null;
+    const v1=(i+1<pk.length)? iso[i+1] : null;
+    if(v1===null||v1===undefined) return ()=>v0;
+    const a0=pk[i]-ja, span=(nr-ja)-a0;
+    return span>0 ? (t=>v0+(v1-v0)*(t-a0)/span) : (()=>v0);
+  };
+  // Iki gecis: 1) her atim kendi polarite oyunu verir, 2) pencere genelinde
+  // kazanan polarite hepsine uygulanir. T/P polaritesi sinus ritminde atimdan
+  // atima degismez; kucuk T + belirgin U'da atim basina alan karsilastirmasi
+  // rastgele U'ya kayar (QTDB sel100'de T tepesi hatasi +41+-51 -> ~0 ms).
+  let tPol=0, pPol=0;
+  for(let pass=0;pass<2;pass++){
+  let tVote=0, pVote=0;
+  T.length=0; Pw.length=0; tA.length=0; pA.length=0; beats.length=0;
+  for(let i=0;i<pk.length;i++){
+    const rr=(i+1<pk.length)? pk[i+1]-pk[i] : rrMed;
+    const nr=(i+1<pk.length)? pk[i+1] : pk[i]+rrMed;
+    const baseAt=lineAt(i,nr);
+    const ts=pk[i]+cl(0.12*rr, 0.10*FS, 0.22*FS);            // R+100..220 ms
+    let   te=pk[i]+cl(0.62*rr, 0.28*FS, 0.55*FS);            // ..R+550 ms
+    te=Math.min(te, nr-Math.round(0.16*FS));                 // P bolgesine girme
+    const t=pickLobe(smT,smP,ts,te,ref,baseAt,pk[i],rr/FS,tPol);
+    if(t){ T.push(t.i); tA.push(t.amp); tVote+=t.vote; }
+    let pw=null;
+    if(i+1<pk.length){
+      const pe=nr-cl(0.06*rr, 0.04*FS, 0.10*FS);             // R-40..100 ms
+      let   ps=nr-cl(0.35*rr, 0.12*FS, 0.32*FS);             // R-120..320 ms
+      if(t) ps=Math.max(ps, t.i+Math.round(0.04*FS));        // T'yi P sanma
+      pw=pickWave(smP,smP,ps,pe,ref,baseAt,pPol);
+      if(pw && pw.i>=pe) pw=null;
+      if(pw){ Pw.push(pw.i); pA.push(pw.amp); pVote+=pw.vote; }
+    }
+    beats.push({r:pk[i], t:t?t.i:null, tPol:t?t.pol:0, p:pw?pw.i:null, pPol:pw?pw.pol:0});
+  }
+  const nt=tVote>=0?1:-1, np=pVote>=0?1:-1;
+  if(pass===0){ tPol=nt; pPol=np; }
+  }
+  return {T,P:Pw,tAmp:tA,pAmp:pA,beats,smP};
+}
+// ---- Dalga sinirlari (delineasyon) ----
+// QRS baslangic/bitis: turev zarfi esigi (Laguna 1994; Martinez 2004'un dalgacik
+// modul-maksimum orani ayni fikir). T ve P sinirlari: trapez alan
+// (Vazquez-Seisdedos 2011) — QTDB'de T bitisi -2.3+-7.2 ms, turev esigi
+// 13.5+-27.0 ms. Trapez esik istemez, integral tabanli: gurultuye dayanikli.
+function deriv(x){
+  const n=x.length, d=new Float32Array(n);
+  for(let i=1;i<n-1;i++) d[i]=(x[i+1]-x[i-1])*0.5;
+  return d;
+}
+// sign*d[i] en buyuk olan i (pozitif T'nin inisi: sign=-1 -> en negatif egim)
+function steepest(d,a,b,sign){
+  a=Math.max(1,Math.round(a)); b=Math.min(d.length-2,Math.round(b));
+  let bi=-1,bv=-Infinity;
+  for(let i=a;i<=b;i++){ const v=sign*d[i]; if(v>bv){ bv=v; bi=i; } }
+  return bi;
+}
+// Trapez alan. (xm,ym) en dik nokta, xr izoelektrik referans. Aday i icin
+// A = s*(ym-y_i)*(2xr-i-xm); A'nin maksimumu dalga sinirini verir (s: polarite).
+// dir=+1 ileri (bitis, xr>xm), dir=-1 geri (baslangic, xr<xm; formul aynalanir).
+// Sinir referansa yapismissa (A hep artmis) guvenilmez: null.
+function trapezium(x,xm,xr,s,dir){
+  let best=-Infinity, bi=-1; const ym=x[xm];
+  if(dir>0){ for(let i=xm;i<=xr;i++){ const A=s*(ym-x[i])*(2*xr-i-xm); if(A>best){ best=A; bi=i; } } }
+  else     { for(let i=xm;i>=xr;i--){ const A=s*(ym-x[i])*(i+xm-2*xr); if(A>best){ best=A; bi=i; } } }
+  return (bi<0 || bi===xr || bi===xm) ? null : bi;
+}
+// Egim orani siniri (Martinez 2004'un dalgacik modul-maksimum orani): en dik
+// nokta xm'den dir yonunde |d| < xi*|d[xm]| olan ilk ornek; lim'i asarsa null.
+function slopeBound(d,xm,dir,xi,lim){
+  const th=xi*Math.abs(d[xm]); if(!(th>0)) return null;
+  for(let i=xm+dir; i>=1 && i<d.length-1; i+=dir){
+    if(Math.abs(d[i])<th) return i;
+    if((i-xm)*dir>lim) return null;
+  }
+  return null;
+}
+// QRS: R cevresindeki egim zarfi. |d|>esik olan son ornek geriye/ileriye dogru
+// izlenir; 24 ms'den kisa sessizlik (Q cukuru, R-S gecisi) zarfi bolmez.
+// Esik: baslangicta 0.05*dmax (PQ duz), bitiste daha yuksek (ST egimli) +
+// turev gurultu tabani (Martinez 2004: xi_QRSon 0.05).
+const DELIN={kOn:0.04, kOff:0.15, noiseK:4, xiPon:0.5, xiPend:0.9, xiTon:0.25, xiTend:0.4, tMode:'trap', pMode:'slope'};
+function qrsBounds(d,r,dNoise){
+  const half=Math.round(0.06*FS), lim=Math.round(0.14*FS), gap=Math.round(0.024*FS);
+  let dmax=0;
+  for(let i=Math.max(1,r-half);i<=Math.min(d.length-2,r+half);i++) dmax=Math.max(dmax,Math.abs(d[i]));
+  if(dmax<=0) return null;
+  const thOn=Math.max(DELIN.kOn*dmax, DELIN.noiseK*dNoise);
+  const thOff=Math.max(DELIN.kOff*dmax, DELIN.noiseK*dNoise);
+  let last=r;
+  for(let i=r;i>=Math.max(1,r-lim);i--){ if(Math.abs(d[i])>thOn) last=i; else if(last-i>gap) break; }
+  const on=last-1;
+  last=r;
+  for(let i=r;i<=Math.min(d.length-2,r+lim);i++){ if(Math.abs(d[i])>thOff) last=i; else if(i-last>gap) break; }
+  const off=last+1;
+  return (off-on>=Math.round(0.03*FS)) ? {on,off} : null;
+}
+// Her atim icin sinirlar ve araliklar (ms). pt = detectPT(f,pk) sonucu.
+// Donus: [{r,qOn,qOff,t,tOn,tEnd,p,pOn,pOff, pr,qrs,qt,pdur,tpe,rr}] (yoksa null)
+function delineate(f,pk,pt){
+  const B=pt.beats, out=[];
+  if(!B.length || !pt.smP) return out;
+  const smP=pt.smP, dP=deriv(smP);
+  const dQ=deriv(boxSmooth(f, oddW(0.008)));
+  const absd=new Array(dQ.length); for(let i=0;i<dQ.length;i++) absd[i]=Math.abs(dQ[i]);
+  const dNoise=1.4826*median(absd);                       // QRS azinlik: medyan = taban
+  const ms=(a,b)=>(a!==null&&b!==null)? (b-a)/FS*1000 : null;
+  const inRange=(v,lo,hi)=>(v!==null && v>=lo && v<=hi)? v : null;
+  const q=B.map(b=>qrsBounds(dQ,b.r,dNoise));
+  let prevTEnd=null;
+  for(let j=0;j<B.length;j++){
+    const b=B[j], r=b.r, nr=(j+1<B.length)? B[j+1].r : null;
+    const qOn=q[j]?q[j].on:null, qOff=q[j]?q[j].off:null;
+    // --- T ---
+    let tEnd=null, tOn=null;
+    if(b.t!==null){
+      const s=b.tPol, t=b.t;
+      let xr=t+Math.round(0.32*FS); if(nr!==null) xr=Math.min(xr, nr-Math.round(0.20*FS));
+      xr=Math.min(xr, smP.length-2);
+      const xm=steepest(dP, t, Math.min(t+Math.round(0.20*FS), xr-1), -s);
+      if(xm>t && xr-xm>=Math.round(0.04*FS))
+        tEnd = DELIN.tMode==='trap' ? trapezium(smP,xm,xr,s,+1) : slopeBound(dP,xm,+1,DELIN.xiTend,xr-xm);
+      const xl=Math.max((qOff!==null? qOff : r+Math.round(0.06*FS))+Math.round(0.02*FS), t-Math.round(0.30*FS), 1);
+      const xm2=steepest(dP, Math.max(xl+1, t-Math.round(0.20*FS)), t, s);
+      if(xm2>xl && xm2<t && xm2-xl>=Math.round(0.04*FS))
+        tOn = DELIN.tMode==='trap' ? trapezium(smP,xm2,xl,s,-1) : slopeBound(dP,xm2,-1,DELIN.xiTon,xm2-xl);
+    }
+    // --- P (bu atimin P'si onceki kayitta: B[j-1].p) ---
+    let p=null, pOn=null, pOff=null;
+    if(j>0 && B[j-1].p!==null){
+      p=B[j-1].p; const s=B[j-1].pPol;
+      const xr=Math.min((qOn!==null? qOn : r-Math.round(0.05*FS))-2, smP.length-2);
+      const xm=steepest(dP, p, Math.min(p+Math.round(0.10*FS), xr-1), -s);
+      if(xm>p && xr-xm>=Math.round(0.02*FS))
+        pOff = DELIN.pMode==='trap' ? trapezium(smP,xm,xr,s,+1) : slopeBound(dP,xm,+1,DELIN.xiPend,xr-xm);
+      const xl=Math.max(p-Math.round(0.16*FS), prevTEnd!==null? prevTEnd+Math.round(0.02*FS) : 1, 1);
+      const xm2=steepest(dP, Math.max(xl+1, p-Math.round(0.10*FS)), p, s);
+      if(xm2>xl && xm2<p && xm2-xl>=Math.round(0.02*FS))
+        pOn = DELIN.pMode==='trap' ? trapezium(smP,xm2,xl,s,-1) : slopeBound(dP,xm2,-1,DELIN.xiPon,xm2-xl);
+    }
+    prevTEnd=tEnd;
+    const rr=(j>0)? (r-B[j-1].r)/FS*1000 : null;
+    out.push({r,qOn,qOff,t:b.t,tOn,tEnd,p,pOn,pOff,rr,
+      pr:  inRange(ms(pOn,qOn), 60, 400),
+      qrs: inRange(ms(qOn,qOff), 40, 250),
+      qt:  inRange(ms(qOn,tEnd), 200, 700),
+      pdur:inRange(ms(pOn,pOff), 40, 200),
+      tpe: inRange(ms(b.t,tEnd), 30, 250)});
+  }
+  return out;
+}
+// Medyan + MAD ile aykiri atma; {med,sd,n} veya null
+function robustStat(vals){
+  const v=vals.filter(x=>x!==null && isFinite(x));
+  if(!v.length) return null;
+  if(v.length<3) return {med:median(v), sd:null, n:v.length};
+  const m=median(v), s=1.4826*median(v.map(x=>Math.abs(x-m)))||1;
+  const keep=v.filter(x=>Math.abs(x-m)<=3*s);
+  const mean=keep.reduce((a,b)=>a+b,0)/keep.length;
+  const sd=Math.sqrt(keep.reduce((a,b)=>a+(b-mean)**2,0)/Math.max(1,keep.length-1));
+  return {med:median(keep), sd, n:keep.length};
+}
+// QTc atim basina onceki RR ile: Fridericia (QT/RR^1/3, AHA 2009 Bazett yerine
+// onerilenlerden) ve Bazett (QT/RR^1/2, yaygin ama hizda sapar).
+function intervalStats(del){
+  const st=k=>robustStat(del.map(b=>b[k]));
+  const qtcOf=(pow)=>robustStat(del.map(b=>(b.qt!==null&&b.rr!==null&&b.rr>300)? b.qt/Math.pow(b.rr/1000,pow) : null));
+  const qt=st('qt'), tpe=st('tpe');
+  return {pr:st('pr'), qrs:st('qrs'), qt, pdur:st('pdur'), tpe,
+          qtcF:qtcOf(1/3), qtcB:qtcOf(1/2),
+          tpeRatio:(qt&&tpe)? tpe.med/qt.med : null};
+}
+
+// QRS tespiti akis halinde qrs.js'de (det). Burasi pencereye dusen tepeleri
+// goreli indeksle alir ve medyan RR'den hiz cikarir.
+function calcPeaks(start,n){
+  const pk=det.peaksIn(start,n);
+  if(pk.length<3) return {hr:null,pk};
+  const rr=[];
+  for(let i=1;i<pk.length;i++){ const d=(pk[i]-pk[i-1])/FS; if(d>0.3&&d<2) rr.push(d); }
+  if(!rr.length) return {hr:null,pk};
+  rr.sort((a,b)=>a-b);
+  return {hr:Math.round(60/rr[(rr.length>>1)]), pk};
+}
+
+const cF=document.getElementById('c'), cR=document.getElementById('r');
+const posEl=document.getElementById('pos');
+
+function draw(){
+  const stale = live && lastData>0 && (performance.now()-lastData)>1500;
+  const n=nSamples(), start=startAbs();
+  const f=view(hF,start,n), r=view(hR,start,n);
+
+  const P=pal();
+  const w=cF.width, h=cF.height, mid=h/2, ctx=cF.getContext('2d');
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(gridFor(w,h),0,0);
+
+  const yScale=mmmv*PXMM/AD_GAIN;
+  ctx.strokeStyle = stale ? P.off : (!live ? P.review : (lo ? P.off : P.trace));
+  ctx.lineWidth=2; ctx.lineJoin='round'; ctx.beginPath();
+  for(let i=0;i<n;i++){
+    const x=w*i/(n-1), y=mid-f[i]*yScale;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.stroke();
+
+  // zaman ekseni: ~90 px'den seyrek olmayan "yuvarlak" aralik sec
+  const pxPerS=mmps*PXMM;
+  let tick=[0.02,0.04,0.1,0.2,0.5,1,2,5,10,30].find(v=>v*pxPerS>=90) || 30;
+  const p2=v=>String(v).padStart(2,'0');
+  const fmtT=abs=>{
+    if(epoch0===null) return (abs/FS).toFixed(tick<1?2:0);
+    const d=new Date(epoch0+abs/FS*1000);
+    const hms=p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds());
+    if(tick>=1) return hms;
+    return p2(d.getMinutes())+':'+p2(d.getSeconds())+'.'
+           +String(d.getMilliseconds()).padStart(3,'0');
+  };
+  ctx.fillStyle=P.axis; ctx.strokeStyle=P.axis; ctx.lineWidth=1;
+  ctx.font='12px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  const t0=start/FS, t1=(start+n)/FS;
+  for(let tt=Math.ceil(t0/tick)*tick; tt<=t1+1e-9; tt+=tick){
+    const x=Math.round((tt-t0)*pxPerS)+.5;
+    if(x<0||x>w) continue;
+    ctx.beginPath(); ctx.moveTo(x,h); ctx.lineTo(x,h-8); ctx.stroke();
+    ctx.fillText(fmtT(tt*FS), x, h-10);
+  }
+
+  const {hr,pk}=calcPeaks(start,n);
+  lastPeaksAbs = pk.map(i=>start+i);
+  const showBeats = !(lo&&live) && !stale;
+  if(showBeats){
+    ctx.fillStyle=P.peak;
+    for(const i of pk){                                   // tepenin ustunde kucuk ucgen
+      const x=w*i/(n-1), y=mid-f[i]*yScale-10;
+      ctx.beginPath(); ctx.moveTo(x,y+7); ctx.lineTo(x-5,y-2); ctx.lineTo(x+5,y-2);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+
+  let ivTxt='';
+  if(showBeats && showPT){
+    const pt=detectPT(f,pk), {T,P:Pw}=pt;
+    ctx.font='bold 12px -apple-system,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    for(const [arr,col,lab] of [[T,P.tcol,'T'],[Pw,P.pcol,'P']]){
+      ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1.5;
+      for(const i of arr){
+        const x=w*i/(n-1), y=mid-f[i]*yScale;
+        ctx.beginPath(); ctx.arc(x,y,3.5,0,6.283); ctx.stroke();
+        ctx.fillText(lab, x, y-6);
+      }
+    }
+    // dalga sinirlari: baslangic "[" ve bitis "]" seklinde kucuk parantezler
+    const del=delineate(f,pk,pt);
+    ctx.lineWidth=1.5;
+    for(const b of del){
+      for(const [on,off,col] of [[b.pOn,b.pOff,P.pcol],[b.qOn,b.qOff,P.peak],[b.tOn,b.tEnd,P.tcol]]){
+        ctx.strokeStyle=col;
+        for(const [i,dir] of [[on,1],[off,-1]]){
+          if(i===null || i<0 || i>=n) continue;
+          const x=Math.round(w*i/(n-1))+.5, y=mid-f[i]*yScale;
+          ctx.beginPath(); ctx.moveTo(x,y-8); ctx.lineTo(x,y+8);
+          ctx.moveTo(x,y-8); ctx.lineTo(x+4*dir,y-8);
+          ctx.moveTo(x,y+8); ctx.lineTo(x+4*dir,y+8); ctx.stroke();
+        }
+      }
+    }
+    const iv=intervalStats(del), fm=o=>o?o.med.toFixed(0):'—';
+    const tLow = !pt.tAmp.length || median(pt.tAmp) < 10;   // T <0.10 mV: QT verme
+    if(iv.pr||iv.qrs||iv.qt)
+      ivTxt=`PR ${fm(iv.pr)} · QRS ${fm(iv.qrs)} · ` + (tLow ? 'QT — (T genliği düşük)'
+            : `QT ${fm(iv.qt)} · QTc ${fm(iv.qtcF)} · Tp-e ${fm(iv.tpe)}`) + ' ms';
+  }
+  document.getElementById('ivals').textContent=ivTxt;
+
+  if(showBeats && pk.length>=2){                          // RR araliklari, ms
+    const by=h-40;
+    ctx.lineWidth=1.3; ctx.font='bold 12px -apple-system,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    for(let i=1;i<pk.length;i++){
+      const xa=w*pk[i-1]/(n-1), xb=w*pk[i]/(n-1), wid=xb-xa;
+      ctx.strokeStyle=P.rrc;
+      ctx.beginPath();
+      ctx.moveTo(xa,by);   ctx.lineTo(xb,by);
+      ctx.moveTo(xa,by-4); ctx.lineTo(xa,by+4);
+      ctx.moveTo(xb,by-4); ctx.lineTo(xb,by+4);
+      ctx.stroke();
+      const ms=(pk[i]-pk[i-1])/FS*1000;
+      let txt=ms.toFixed(0)+' ms', tw=ctx.measureText(txt).width;
+      if(wid<tw+8){ txt=ms.toFixed(0); tw=ctx.measureText(txt).width; }
+      if(wid>=tw+8){                                      // sigmiyorsa etiket yok
+        const mx=(xa+xb)/2;
+        ctx.fillStyle=P.label; ctx.fillRect(mx-tw/2-4,by-18,tw+8,16);
+        ctx.fillStyle=P.rrc;  ctx.fillText(txt,mx,by-5);
+      }
+    }
+  }
+
+  vw={start:start,n:n,w:w,mid:mid,yScale:yScale};
+  const xOf=a=>w*(a-start)/(n-1);
+  const msOf=m=>Math.abs(m.t2-m.t1)/FS*1000;
+  function drawVCal(m,hovE){                          // dikey kaliper: iki yatay cizgi, delta mV
+    const ya=mid-m.v1*yScale, yb=mid-m.v2*yScale;
+    let xa=Math.min(xOf(m.t1),xOf(m.t2))-20, xb=Math.max(xOf(m.t1),xOf(m.t2))+20;
+    if(xb-xa<60){ const c=(xa+xb)/2; xa=c-30; xb=c+30; }
+    xa=Math.max(0,xa); xb=Math.min(w,xb);
+    ctx.fillStyle=P.calFill; ctx.fillRect(xa,Math.min(ya,yb),xb-xa,Math.abs(yb-ya));
+    ctx.setLineDash([5,5]);
+    for(const [y,which] of [[ya,'v1'],[yb,'v2']]){
+      const on = hovE===which;
+      ctx.strokeStyle = on ? P.calHot : P.cal; ctx.lineWidth = on ? 2.5 : 1.5;
+      const yy=Math.round(y)+0.5;
+      ctx.beginPath(); ctx.moveTo(xa,yy); ctx.lineTo(xb,yy); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    const mv=Math.abs(m.v2-m.v1)/AD_GAIN;
+    if(mv>0){
+      const txt=mv.toFixed(2)+' mV';
+      ctx.font='bold 13px -apple-system,sans-serif';
+      const tw=ctx.measureText(txt).width, ty=(ya+yb)/2, tx=Math.min(w-tw/2-6, xb+tw/2+8);
+      ctx.fillStyle=P.label; ctx.fillRect(tx-tw/2-5,ty-10,tw+10,19);
+      ctx.fillStyle=P.cal; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(txt,tx,ty);
+    }
+  }
+  function drawCal(m,hovE){
+    if(m.kind==='v'){ drawVCal(m,hovE); return; }
+    const xa=xOf(m.t1), xb=xOf(m.t2), lo2=Math.min(xa,xb), wid=Math.abs(xb-xa);
+    ctx.fillStyle=P.calFill; ctx.fillRect(lo2,0,wid,h);
+    ctx.setLineDash([5,5]);
+    for(const [x,which] of [[xa,'t1'],[xb,'t2']]){
+      const on = hovE===which;
+      ctx.strokeStyle = on ? P.calHot : P.cal;
+      ctx.lineWidth = on ? 2.5 : 1.5;
+      const xx=Math.round(x)+0.5;                       // yarim piksel: keskin cizgi
+      ctx.beginPath(); ctx.moveTo(xx,0); ctx.lineTo(xx,h); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    if(wid>5){                                          // ayak baglantisi
+      ctx.strokeStyle=P.cal; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(xa,30); ctx.lineTo(xb,30); ctx.stroke();
+    }
+    const ms=msOf(m);
+    if(ms>0){
+      const v1=hF[((Math.round(m.t1)%HIST)+HIST)%HIST], v2=hF[((Math.round(m.t2)%HIST)+HIST)%HIST];
+      const txt=ms.toFixed(0)+' ms · '+(60000/ms).toFixed(0)+' /dk · '
+                +Math.abs((v2-v1)/AD_GAIN).toFixed(2)+' mV';
+      ctx.font='bold 13px -apple-system,sans-serif';
+      const tw=ctx.measureText(txt).width;
+      if(wid>=tw+6){                                    // sigmazsa etiketi hic yazma
+        const mid=(xa+xb)/2;
+        ctx.fillStyle=P.label; ctx.fillRect(mid-tw/2-5,12,tw+10,19);
+        ctx.fillStyle=P.cal; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(txt,mid,22);
+      }
+    }
+  }
+  for(let i=0;i<meas.length;i++)
+    drawCal(meas[i], hoverEdge&&hoverEdge.i===i?hoverEdge.edge:null);
+  if(ghost) drawCal(ghost,null);
+
+  document.getElementById('cal').textContent = summary();
+
+  const rc=cR.getContext('2d'), rw=cR.width, rh=cR.height;
+  rc.clearRect(0,0,rw,rh);
+  rc.fillStyle=P.bg; rc.fillRect(0,0,rw,rh);
+  let mn=1e9,mx=-1e9; for(const v of r){ if(v<mn)mn=v; if(v>mx)mx=v; }
+  const span=Math.max(mx-mn,1);
+  rc.strokeStyle=P.rawTrace; rc.lineWidth=1.2; rc.beginPath();
+  for(let i=0;i<n;i++){
+    const x=rw*i/(n-1), y=rh-(r[i]-mn)/span*(rh-10)-5;
+    i?rc.lineTo(x,y):rc.moveTo(x,y);
+  }
+  rc.stroke();
+  const ymid=rh-(1650-mn)/span*(rh-10)-5;
+  if(ymid>0&&ymid<rh){ rc.strokeStyle=P.mid; rc.beginPath();
+    rc.moveTo(0,ymid); rc.lineTo(rw,ymid); rc.stroke(); }
+
+  document.getElementById('rng').textContent=mn.toFixed(0)+'–'+mx.toFixed(0);
+  const modeEl=document.getElementById('mode');
+  modeEl.textContent = live ? 'canlı' : 'duraklatıldı';
+  modeEl.className = 'pill '+(live?'ok':'rev');
+  const back=(total-n-start)/FS;
+  const wall=abs=>{
+    if(epoch0===null) return '--:--:--';
+    const d=new Date(epoch0+abs/FS*1000);
+    return p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds())
+           +'.'+String(d.getMilliseconds()).padStart(3,'0');
+  };
+  document.getElementById('tpos').textContent =
+    live ? wall(total)+'   ('+(n/FS).toFixed(1)+' sn pencere)'
+         : wall(start)+' – '+wall(start+n)+'   ('+(n/FS).toFixed(1)+' sn, '
+           +back.toFixed(0)+' sn geride)';
+
+  const leadEl=document.getElementById('lead');
+  if(stale){ leadEl.textContent='VERİ YOK — '+(srcStatus||'kaynağı kontrol et'); leadEl.className='pill bad'; }
+  else if(lo && live){ leadEl.textContent='ELEKTROT TEMASI YOK'; leadEl.className='pill bad'; }
+  else { leadEl.textContent='temas var'; leadEl.className='pill ok'; }
+  document.getElementById('hr').textContent=(hr&&!(lo&&live))?hr:'--';
+  let rrTxt='';
+  if(showBeats && pk.length>=3){
+    const ds=[]; for(let i=1;i<pk.length;i++) ds.push((pk[i]-pk[i-1])/FS*1000);
+    const md=median(ds), mn=Math.min(...ds), mx2=Math.max(...ds);
+    rrTxt='RR medyan '+md.toFixed(0)+' ms  ('+mn.toFixed(0)+'–'+mx2.toFixed(0)+', ×'+ds.length+')';
+  }
+  document.getElementById('rrstat').textContent=rrTxt;
+
+  const bigMs=5/mmps*1000, smallMs=1/mmps*1000;
+  document.getElementById('gridnote').textContent =
+    'Zaman ekseni kalibre: büyük kare '+(bigMs>=100?bigMs.toFixed(0)+' ms':bigMs.toFixed(1)+' ms')
+    +', küçük kare '+smallMs.toFixed(smallMs>=10?0:1)+' ms.';
+
+  const nowMs=performance.now();
+  if(nowMs-interpAt>1000){                       // her karede degil, saniyede bir
+    interpAt=nowMs;
+    const endAbs = live ? total : Math.min(total, start+n);
+    let r;
+    try {                                        // panel hatasi cizimi dondurmesin
+      r = computeInterp(endAbs);
+    } catch(err){
+      console.error('yorum hatasi', err);
+      r = {q:'hata', qc:'f-bad', rows:[[' ', 'Değerlendirme hatası', String(err)]]};
+    }
+    interpQual = r.q ? r : null;
+    interpRows = r.rows;
+    interpWinTxt = live ? `son ${INTERP_WIN} sn` : `${INTERP_WIN} sn · duraklatıldı`;
+    renderInterp();
+    updateRecStat();
+  }
+
+  if(!dragSlider && live){          // duraklatilmisken max buyurse tutamak sola kayar
+    posEl.max=maxAnchor();
+    posEl.value=maxAnchor();
+  }
+  requestAnimationFrame(draw);
+}
+syncPauseLabel();
+draw();
+
+cF.onwheel=e=>{
+  e.preventDefault();
+  setAnchor(startAbs() + Math.sign(e.deltaY)*Math.round(nSamples()*0.15));
+};
+function seg(id,set){
+  document.getElementById(id).onclick=e=>{
+    if(e.target.tagName!=='BUTTON') return;
+    for(const b of e.target.parentNode.children) b.classList.remove('on');
+    e.target.classList.add('on'); set(e.target.dataset.v);
+  };
+}
+function median(a){ const s=[...a].sort((x,y)=>x-y), h=s.length>>1;
+  return s.length%2 ? s[h] : (s[h-1]+s[h])/2; }
+function summary(){
+  if(!meas.length) return '';
+  const ds=meas.filter(m=>m.kind!=='v').map(m=>Math.abs(m.t2-m.t1)/FS*1000).filter(d=>d>0);
+  const vs=meas.filter(m=>m.kind==='v').map(m=>Math.abs(m.v2-m.v1)/AD_GAIN).filter(d=>d>0);
+  const parts=[];
+  if(ds.length){
+    const md=median(ds);
+    parts.push(ds.length>1
+      ? 'medyan '+md.toFixed(0)+' ms · '+(60000/md).toFixed(0)+' /dk   ×'+ds.length
+      : md.toFixed(0)+' ms · '+(60000/md).toFixed(0)+' /dk');
+  }
+  if(vs.length){
+    const mv=median(vs);
+    parts.push(vs.length>1 ? 'medyan '+mv.toFixed(2)+' mV   ×'+vs.length : mv.toFixed(2)+' mV');
+  }
+  return parts.join('   ');
+}
+function cxOf(e){ const r=cF.getBoundingClientRect();
+  return (e.clientX-r.left)*(cF.width/r.width); }
+function tolPx(){ const r=cF.getBoundingClientRect();
+  return HIT_PX*(cF.width/r.width); }
+function sampleAt(e){
+  const r=cF.getBoundingClientRect();
+  const frac=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+  return vw.start+frac*(vw.n-1);
+}
+function cyOf(e){ const r=cF.getBoundingClientRect();
+  return (e.clientY-r.top)*(cF.height/r.height); }
+function valAt(e){                         // imlec yuksekligi -> iz birimi (AD sayimi)
+  if(e.shiftKey){                          // Shift: izin o andaki degerine kilitle
+    const i=Math.round(sampleAt(e)), oldest=Math.max(0,total-HIST);
+    if(i>=oldest && i<total) return hF[((i%HIST)+HIST)%HIST];
+  }
+  return (vw.mid-cyOf(e))/vw.yScale;
+}
+function snapAbs(a){                       // Shift: en yakin yerel uc degere kilitle
+  const rad=Math.round(0.04*FS), oldest=Math.max(0,total-HIST);
+  let best=Math.round(a), bv=-Infinity;
+  for(let k=-rad;k<=rad;k++){
+    const i=Math.round(a)+k;
+    if(i<oldest||i>=total) continue;
+    const v=Math.abs(hF[((i%HIST)+HIST)%HIST]);
+    if(v>bv){ bv=v; best=i; }
+  }
+  return best;
+}
+function vSpan(m){                         // dikey kaliperin yatay uzanimi (piksel)
+  const xOf=a=>vw.w*(a-vw.start)/(vw.n-1);
+  let xa=Math.min(xOf(m.t1),xOf(m.t2))-20, xb=Math.max(xOf(m.t1),xOf(m.t2))+20;
+  if(xb-xa<60){ const c=(xa+xb)/2; xa=c-30; xb=c+30; }
+  return [xa,xb];
+}
+function pick(e){                          // sure: sadece x onemli; genlik: y ve uzanim
+  const cx=cxOf(e), cy=cyOf(e), tol=tolPx(), xOf=a=>vw.w*(a-vw.start)/(vw.n-1);
+  for(let i=meas.length-1;i>=0;i--){       // en yeni once (hover ve silme tutarli)
+    const m=meas[i];
+    if(m.kind==='v'){
+      const [xa,xb]=vSpan(m);
+      if(cx<xa-tol || cx>xb+tol) continue;
+      if(Math.abs(cy-(vw.mid-m.v1*vw.yScale))<=tol) return {i,edge:'v1'};
+      if(Math.abs(cy-(vw.mid-m.v2*vw.yScale))<=tol) return {i,edge:'v2'};
+      continue;
+    }
+    if(Math.abs(cx-xOf(m.t1))<=tol) return {i,edge:'t1'};
+    if(Math.abs(cx-xOf(m.t2))<=tol) return {i,edge:'t2'};
+  }
+  return null;
+}
+function applyCursor(){
+  cF.style.cursor = tool!=='cal' ? (dragCanvas?'grabbing':'grab')
+                  : (hoverEdge ? (hoverEdge.edge[0]==='v'?'ns-resize':'ew-resize') : 'crosshair');
+}
+// Taslak kaliperi kabul et: sure icin en az 3 px genislik, genlik icin 3 px yukseklik
+function commitGhost(){
+  if(!ghost) return;
+  if(ghost.kind==='v'){ if(Math.abs(ghost.v2-ghost.v1)*vw.yScale>3) meas.push(ghost); }
+  else if(ghost.kind==='t'){ if(Math.abs(ghost.t2-ghost.t1)/vw.n*vw.w>3) meas.push(ghost); }
+  ghost=null;
+}
+cF.onwheel=e=>{
+  e.preventDefault();
+  setAnchor(startAbs() + Math.sign(e.deltaY)*Math.round(nSamples()*0.15));
+};
+cF.onmousedown=e=>{
+  e.preventDefault();
+  if(tool==='cal'){
+    const hit=pick(e);
+    if(hit){ resizing=hit; }                       // mevcut ucu yakala
+    else {                                         // yon ilk hareketle belli olur: yatay=sure, dikey=genlik
+      const a=e.shiftKey?snapAbs(sampleAt(e)):sampleAt(e), v=valAt(e);
+      ghost={kind:null,t1:a,t2:a,v1:v,v2:v,x0:e.clientX,y0:e.clientY};
+    }
+  } else { dragCanvas=true; dragX=e.clientX; dragAnchor=startAbs(); }
+  applyCursor();
+};
+window.addEventListener('mousemove', e=>{
+  if(resizing){                                    // suruklerken hover taramasi yok:
+    if(resizing.edge[0]==='v') meas[resizing.i][resizing.edge]=valAt(e);
+    else meas[resizing.i][resizing.edge]=e.shiftKey?snapAbs(sampleAt(e)):sampleAt(e);   // kavrama komsuya kaymaz
+    return;
+  }
+  if(ghost){
+    if(ghost.kind===null){
+      const dx=Math.abs(e.clientX-ghost.x0), dy=Math.abs(e.clientY-ghost.y0);
+      if(Math.max(dx,dy)>4) ghost.kind = dx>=dy ? 't' : 'v';
+    }
+    if(ghost.kind==='v'){ ghost.v2=valAt(e); ghost.t2=sampleAt(e); }
+    else ghost.t2=e.shiftKey?snapAbs(sampleAt(e)):sampleAt(e);
+    return;
+  }
+  if(dragCanvas){
+    const perPx=nSamples()/cF.getBoundingClientRect().width;
+    setAnchor(dragAnchor-(e.clientX-dragX)*perPx); return;
+  }
+  if(tool==='cal'){ hoverEdge=pick(e); applyCursor(); }
+});
+window.addEventListener('mouseup', ()=>{
+  commitGhost();                                   // kazara tiklamayi atar
+  resizing=null; dragCanvas=false; applyCursor();
+});
+cF.addEventListener('mouseleave', ()=>{            // imlec disari cikarsa surukleme takilmasin
+  commitGhost();
+  resizing=null; dragCanvas=false; hoverEdge=null;
+});
+cF.ondblclick=e=>{                                 // ust ust binenlerde en yeniyi sil
+  const cx=cxOf(e), cy=cyOf(e), xOf=a=>vw.w*(a-vw.start)/(vw.n-1);
+  for(let i=meas.length-1;i>=0;i--){
+    const m=meas[i];
+    if(m.kind==='v'){
+      const [xa,xb]=vSpan(m), ya=vw.mid-m.v1*vw.yScale, yb=vw.mid-m.v2*vw.yScale;
+      if(cx>=xa && cx<=xb && cy>=Math.min(ya,yb) && cy<=Math.max(ya,yb)){ meas.splice(i,1); return; }
+      continue;
+    }
+    const a=xOf(m.t1), b=xOf(m.t2);
+    if(cx>=Math.min(a,b) && cx<=Math.max(a,b)){ meas.splice(i,1); return; }
+  }
+};
+document.getElementById('calclr').onclick=()=>{ meas=[]; ghost=null; hoverEdge=null; };
+document.getElementById('rec').onclick=recToggle;
+document.getElementById('dl').onclick=recDownload;
+document.getElementById('ptbtn').onclick=e=>{
+  showPT=!showPT; e.target.textContent = showPT ? 'P/T gizle' : 'P/T göster';
+};
+seg('tool',v=>{ setTool(v); hoverEdge=null; });
+seg('theme',v=>{ paper=(v==='paper'); gridKey='';
+  document.body.classList.toggle('paper',paper); });
+document.body.classList.add('paper');
+document.getElementById('live').onclick=goLive;
+document.getElementById('pause').onclick=()=>{ live?setAnchor(total-nSamples()):goLive(); };
+window.addEventListener('keydown', e=>{
+  const step=Math.round(nSamples()*(e.shiftKey?0.5:0.1));
+  if(e.key==='ArrowLeft'){ setAnchor(startAbs()-step); e.preventDefault(); }
+  else if(e.key==='ArrowRight'){ setAnchor(startAbs()+step); e.preventDefault(); }
+  else if(e.key===' '){ live?setAnchor(total-nSamples()):goLive(); e.preventDefault(); }
+  else if(e.key==='Escape'){ meas=[]; ghost=null; }
+  else if((e.key==='z'||e.key==='Z') && (e.metaKey||e.ctrlKey)){ meas.pop(); e.preventDefault(); }
+});
+seg('sweep',v=>{ mmps=parseFloat(v); gridKey=''; });
+seg('gain',v=>{ mmmv=parseFloat(v); });
+
+// --- Web Bluetooth kaynagi (tools/gen_ble_page.py ekler, elle duzenleme) ---
+// Sunucu yok: telefon cihaza dogrudan baglanir. Paket bicimi firmware ile ayni:
+// u32 sira no + u16[bit15 = elektrot disi, bit14..0 = mV], little-endian.
+const BLE_SVC='b1a10000-7a3f-4c5e-9b2d-0e1f2a3b4c5d';
+const BLE_DATA='b1a10001-7a3f-4c5e-9b2d-0e1f2a3b4c5d';
+let bleDev=null, expSeq=null, bleLost=0, bleBat=null, wakeLock=null;
+const bleBtn=document.createElement('button');
+bleBtn.id='ble'; bleBtn.textContent='cihaza bağlan';
+document.querySelector('header').appendChild(bleBtn);
+document.getElementById('rr').textContent='--';
+document.getElementById('rn').textContent='solunum bu sürümde yok';
+
+function bleStatus(s){
+  srcStatus=s+(bleBat!==null?' · pil %'+bleBat:'')+(bleLost?' · kayıp '+bleLost:'');
+  bleBtn.textContent=srcStatus;
+}
+function onPacket(ev){
+  const v=ev.target.value; if(v.byteLength<6) return;
+  const seq=v.getUint32(0,true), n=(v.byteLength-4)>>1;
+  if(expSeq!==null && seq!==expSeq) bleLost+=(seq-expSeq)>>>0;
+  expSeq=(seq+n)>>>0;
+  const raw=new Array(n); let l=0;
+  for(let k=0;k<n;k++){ const x=v.getUint16(4+2*k,true); l=(x&0x8000)?1:0; raw[k]=x&0x7FFF; }
+  if(epoch0===null) epoch0=Date.now()-(total/FS)*1000;
+  zpFeed(raw); lo=l; lastData=performance.now(); recFeed(raw,l);
+}
+async function bleOpen(){
+  bleStatus('bağlanıyor');
+  const srv=await bleDev.gatt.connect();
+  const ch=await (await srv.getPrimaryService(BLE_SVC)).getCharacteristic(BLE_DATA);
+  ch.addEventListener('characteristicvaluechanged', onPacket);
+  expSeq=null;
+  await ch.startNotifications();
+  try{                                      // pil servisi: XIAO'da var, ESP32'de yok
+    const bc=await (await srv.getPrimaryService('battery_service')).getCharacteristic('battery_level');
+    const upd=dv=>{ bleBat=dv.getUint8(0); bleStatus('bağlı'); };
+    upd(await bc.readValue());
+    bc.addEventListener('characteristicvaluechanged', e=>upd(e.target.value));
+    await bc.startNotifications().catch(()=>{});
+  }catch(e){}
+  bleStatus('bağlı');
+  try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}   // ekran kararmasin
+}
+async function bleReconnect(){
+  for(let i=1;i<=30 && bleDev && !bleDev.gatt.connected;i++){
+    try{ await bleOpen(); return; }
+    catch(e){ bleStatus('koptu, yeniden deneme '+i); await new Promise(r=>setTimeout(r,2000)); }
+  }
+  if(bleDev && !bleDev.gatt.connected) bleStatus('bağlantı yok, dokun');
+}
+bleBtn.onclick=async()=>{
+  if(bleDev && bleDev.gatt.connected) return;
+  if(!navigator.bluetooth){
+    bleStatus('bu tarayıcı Web Bluetooth desteklemiyor (Android Chrome gerekli)');
+    return;
+  }
+  try{
+    if(!bleDev){
+      bleDev=await navigator.bluetooth.requestDevice({
+        filters:[{services:[BLE_SVC]}], optionalServices:['battery_service']});
+      bleDev.addEventListener('gattserverdisconnected', bleReconnect);
+    }
+    await bleOpen();
+  }catch(e){ bleStatus('hata: '+e.message); }
+};
+document.addEventListener('visibilitychange', async()=>{
+  if(wakeLock!==null && document.visibilityState==='visible'){
+    try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
+  }
+});
+</script></body></html>
