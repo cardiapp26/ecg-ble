@@ -12,6 +12,6 @@ Kök adres (https://cardiapp26.github.io/ecg-ble/) eski bağlantılar bozulması
 XIAO sayfasıyla aynı kalır.
 
 Sayfalar ecg-recorder projesindeki `tools/gen_ble_page.py` ile üretilir
-(`build_page(256)` / `build_page(250)`), elle düzenleme.
+(`--fs 256` / `--fs 250 --out ...`), elle düzenleme.
 
 > Eğitim/araştırma amaçlıdır. Tıbbi teşhis için değildir, kalibre edilmemiştir.

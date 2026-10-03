@@ -1,5 +1,5 @@
 <!doctype html><html lang="tr"><head><meta charset="utf-8">
-<title>ECG canlı</title><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ECG BLE</title><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root{--bg:#0d1117;--fg:#e6edf3;--dim:#8b949e;--trace:#3fb950;--warn:#f85149;--line:#21262d}
 body.paper{--bg:#fbf5f3;--fg:#1a1a1a;--dim:#6b6b6b;--line:#e0d5d2}
@@ -2610,32 +2610,81 @@ window.addEventListener('keydown', e=>{
 seg('sweep',v=>{ mmps=parseFloat(v); gridKey=''; });
 seg('gain',v=>{ mmmv=parseFloat(v); });
 
-const es=new EventSource('/stream');
-es.onmessage=ev=>{
-  const d=JSON.parse(ev.data);
-  if(d.error){ document.getElementById('lead').textContent='hata: '+d.error; return; }
-  if(d.st!==undefined){
-    // Sunucu yeniden baslayinca eski sayfa akisa kendiliginden baglanir ve eski
-    // kodla calismaya devam eder: surum degistiyse sayfayi yenile.
-    if(d.build && d.build!==PAGE_BUILD){
-      if(!recOn && !hrvRun && !hrvLast) location.reload();   // kayit/olcum/sonuc kaybolmasin
-      else srcStatus='yeni sürüm var, kayıt bitince sayfayı yenile';
-    }
-    srcStatus=d.st; setBattery(d.bat); return;
-  }   // durum mesaji, ornek yok
-  if(epoch0===null) epoch0=Date.now()-(total/FS)*1000;
-  zpFeed(d.raw); lo=d.lo; lastData=performance.now();   // sunucunun d.filt'i kullanilmaz
-  recFeed(d.raw, d.lo);
-  respRate=(d.rr===undefined)?null:d.rr; respConf=d.rc||0;
-  const rrEl=document.getElementById('rr'), rnEl=document.getElementById('rn');
-  if(respRate===null){
-    rrEl.textContent='--'; rrEl.style.opacity=.45;
-    rnEl.textContent=d.rn||'';
-  } else {
-    rrEl.textContent=respRate.toFixed(0);
-    rrEl.style.opacity = respConf>=0.30 ? 1 : .45;
-    rnEl.textContent='güven '+respConf.toFixed(2)+(respConf<0.30?', güvenilmez':'');
+// --- Web Bluetooth kaynagi (tools/gen_ble_page.py ekler, elle duzenleme) ---
+// Sunucu yok: telefon cihaza dogrudan baglanir. Paket bicimi firmware ile ayni:
+// u32 sira no + u16[bit15 = elektrot disi, bit14..0 = mV], little-endian.
+const BLE_SVC='b1a10000-7a3f-4c5e-9b2d-0e1f2a3b4c5d';
+const BLE_DATA='b1a10001-7a3f-4c5e-9b2d-0e1f2a3b4c5d';
+let bleDev=null, expSeq=null, bleLost=0, bleBat=null, wakeLock=null;
+const bleBtn=document.createElement('button');
+bleBtn.id='ble'; bleBtn.textContent='cihaza bağlan';
+document.querySelector('header').appendChild(bleBtn);
+document.getElementById('rr').textContent='--';
+document.getElementById('rn').textContent='solunum bu sürümde yok';
+
+function bleStatus(s){
+  srcStatus=s+(bleBat!==null?' · pil %'+bleBat:'')+(bleLost?' · kayıp '+bleLost:'');
+  bleBtn.textContent=srcStatus;
+}
+function onPacket(ev){
+  const v=ev.target.value; if(v.byteLength<6) return;
+  const seq=v.getUint32(0,true), n=(v.byteLength-4)>>1;
+  // Firmware sayaci baglanti yokken de artar: sicrama = kaybolan ornek sayisi
+  // (paket kaybi ya da kopma suresi). Kayda bos ornek olarak islenir, zaman
+  // ekseni kaymaz. 1 saatten buyuk sicrama = cihaz yeniden basladi (sayac
+  // sifirlandi): bosluk son paketten bu yana gecen sureden hesaplanir.
+  if(expSeq!==null && seq!==expSeq){
+    let gap=(seq-expSeq)>>>0;
+    if(gap>FS*3600) gap=Math.max(0, Math.round((performance.now()-lastData)/1000*FS));
+    bleLost+=gap; recGap(gap);
   }
-  rnEl.title=d.rn||'';
+  expSeq=(seq+n)>>>0;
+  const raw=new Array(n); let l=0;
+  for(let k=0;k<n;k++){ const x=v.getUint16(4+2*k,true); l=(x&0x8000)?1:0; raw[k]=x&0x7FFF; }
+  if(epoch0===null) epoch0=Date.now()-(total/FS)*1000;
+  zpFeed(raw); lo=l; lastData=performance.now(); recFeed(raw,l);
+}
+async function bleOpen(){
+  bleStatus('bağlanıyor');
+  const srv=await bleDev.gatt.connect();
+  const ch=await (await srv.getPrimaryService(BLE_SVC)).getCharacteristic(BLE_DATA);
+  ch.addEventListener('characteristicvaluechanged', onPacket);   // expSeq korunur: kopma boslugu olculsun
+  await ch.startNotifications();
+  try{                                      // pil servisi: XIAO'da var, ESP32'de yok
+    const bc=await (await srv.getPrimaryService('battery_service')).getCharacteristic('battery_level');
+    const upd=dv=>{ bleBat=dv.getUint8(0); setBattery(bleBat); bleStatus('bağlı'); };
+    upd(await bc.readValue());
+    bc.addEventListener('characteristicvaluechanged', e=>upd(e.target.value));
+    await bc.startNotifications().catch(()=>{});
+  }catch(e){}
+  bleStatus('bağlı');
+  try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}   // ekran kararmasin
+}
+async function bleReconnect(){
+  for(let i=1;i<=30 && bleDev && !bleDev.gatt.connected;i++){
+    try{ await bleOpen(); return; }
+    catch(e){ bleStatus('koptu, yeniden deneme '+i); await new Promise(r=>setTimeout(r,2000)); }
+  }
+  if(bleDev && !bleDev.gatt.connected) bleStatus('bağlantı yok, dokun');
+}
+bleBtn.onclick=async()=>{
+  if(bleDev && bleDev.gatt.connected) return;
+  if(!navigator.bluetooth){
+    bleStatus('bu tarayıcı Web Bluetooth desteklemiyor (Android Chrome gerekli)');
+    return;
+  }
+  try{
+    if(!bleDev){
+      bleDev=await navigator.bluetooth.requestDevice({
+        filters:[{services:[BLE_SVC]}], optionalServices:['battery_service']});
+      bleDev.addEventListener('gattserverdisconnected', bleReconnect);
+    }
+    await bleOpen();
+  }catch(e){ bleStatus('hata: '+e.message); }
 };
+document.addEventListener('visibilitychange', async()=>{
+  if(wakeLock!==null && document.visibilityState==='visible'){
+    try{ wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
+  }
+});
 </script></body></html>
