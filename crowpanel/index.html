@@ -1,44 +1,86 @@
 <!doctype html><html lang="tr"><head><meta charset="utf-8">
 <title>ECG BLE</title><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-:root{--bg:#0d1117;--fg:#e6edf3;--dim:#8b949e;--trace:#3fb950;--warn:#f85149;--line:#21262d}
-body.paper{--bg:#fbf5f3;--fg:#1a1a1a;--dim:#6b6b6b;--line:#e0d5d2}
-body.paper button{background:#fff;color:#1a1a1a;border-color:#d5c8c4}
-body.paper button:hover{background:#f0e7e4}
-body.paper .seg{border-color:#d5c8c4}
-body.paper .seg button{border-right-color:#d5c8c4}
-body.paper .seg button.on{background:#1f6feb;color:#fff}
-body.paper canvas{background:#fffaf8;border-color:#e0d5d2}
+/* Renk belirtecleri: monitor (koyu) varsayilan, body.paper acik tema. */
+:root{--bg:#0b0f14;--fg:#e6edf3;--dim:#8b949e;--trace:#3fb950;--warn:#f85149;--line:#21262d;
+ --panel:#11161d;--ctl:#1a2029;--ctl-h:#232b36;--bd:#2d3540;--accent:#2f81f7;--accent-fg:#fff;
+ --cap:#7d8590;--ring:rgba(47,129,247,.45);--danger:#da3633;color-scheme:dark}
+body.paper{--bg:#f6f4f2;--fg:#1c1f23;--dim:#626970;--line:#e2ddd9;
+ --panel:#ffffff;--ctl:#ffffff;--ctl-h:#f1eeeb;--bd:#d6d0cb;--accent:#1f6feb;--accent-fg:#fff;
+ --cap:#7a7f85;--ring:rgba(31,111,235,.35);--danger:#c0342b;color-scheme:light}
+body.paper canvas{background:#fffaf8}
 body.paper .ok{background:#dff3e4;color:#1a7f37}
 body.paper .bad{background:#ffe3e1;color:#c0342b}
 body.paper .rev{background:#fff3d4;color:#8a6100}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--fg);
- font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;padding:12px 20px;
- border-bottom:1px solid var(--line)}
-h1{font-size:15px;font-weight:500;margin:0;color:var(--dim)}
-.hr{font-size:32px;font-weight:500;font-variant-numeric:tabular-nums}
-.hr small{font-size:13px;color:var(--dim);font-weight:400}
-.stat{color:var(--dim);font-size:13px;font-variant-numeric:tabular-nums}
-.pill{padding:3px 10px;border-radius:999px;font-size:13px}
+ font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+ -webkit-font-smoothing:antialiased}
+
+/* ust bilgi cubugu */
+header{display:flex;align-items:center;gap:10px 18px;flex-wrap:wrap;padding:10px 20px;
+ background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+h1{font-size:14px;font-weight:600;margin:0;color:var(--fg);letter-spacing:.2px;margin-right:6px}
+h1 small{display:block;font-weight:400}
+.hr{font-size:30px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.hr small{font-size:12px;color:var(--dim);font-weight:500;margin-left:2px}
+.stat{color:var(--dim);font-size:12.5px;font-variant-numeric:tabular-nums}
+#ivals{color:var(--fg);font-weight:500}
+.pill{padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.2px}
 .ok{background:#132d1b;color:var(--trace)}
 .bad{background:#3d1418;color:var(--warn)}
 .rev{background:#3a2d0f;color:#d29922}
-main{padding:14px 20px 24px}
-canvas{width:100%;display:block;background:#000;border:1px solid var(--line);border-radius:8px}
+#ble{margin-left:auto;background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+#ble:hover{filter:brightness(1.08);background:var(--accent)}
+
+main{padding:14px 20px 28px}
+canvas{width:100%;display:block;background:#000;border:1px solid var(--line);border-radius:10px}
 #c{height:360px;cursor:ew-resize}
 #r{height:96px;margin-top:10px}
-#pos{width:100%;margin-top:12px;accent-color:#1f6feb}
-.row{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:12px;
- color:var(--dim);font-size:13px}
-.seg{display:inline-flex;border:1px solid #30363d;border-radius:6px;overflow:hidden}
-.seg button{border:0;border-right:1px solid #30363d;border-radius:0}
+#pos{width:100%;margin-top:10px;accent-color:var(--accent)}
+
+/* kontrol paneli: baslikli gruplar */
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px 10px;
+ display:flex;flex-direction:column;gap:7px;min-width:0}
+.grp>h3{margin:0;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--cap)}
+.grp .ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.grp .lab{font-size:12px;color:var(--dim);min-width:58px}
+.grp .unit{font-size:12px;color:var(--dim)}
+.grp.grow{flex:1 1 360px}
+
+.row{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:12px;color:var(--dim);font-size:13px}
+button{height:30px;padding:0 12px;font:500 13px/1 inherit;font-family:inherit;color:var(--fg);
+ background:var(--ctl);border:1px solid var(--bd);border-radius:7px;cursor:pointer;
+ display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:background .12s,border-color .12s}
+button:hover{background:var(--ctl-h)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ring);outline-offset:1px}
+button:disabled{opacity:.45;cursor:default}
+button:disabled:hover{background:var(--ctl)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);min-width:104px;justify-content:center}
+button.primary:hover{filter:brightness(1.08);background:var(--accent)}
+button.tog.on{background:color-mix(in srgb,var(--accent) 14%,var(--ctl));border-color:var(--accent);color:var(--accent)}
+.seg{display:inline-flex;border:1px solid var(--bd);border-radius:7px;overflow:hidden;background:var(--ctl)}
+.seg button{border:0;border-right:1px solid var(--bd);border-radius:0;height:28px;padding:0 10px;
+ font-variant-numeric:tabular-nums}
 .seg button:last-child{border-right:0}
-.seg button.on{background:#1f6feb;color:#fff}
-button{background:#21262d;color:var(--fg);border:1px solid #30363d;border-radius:6px;
- padding:5px 12px;font-size:13px;cursor:pointer}
-button:hover{background:#30363d}
+.seg button.on{background:var(--accent);color:var(--accent-fg)}
+#zoomctl button{min-width:34px;justify-content:center}
+#zoomlbl{min-width:54px!important}
+#gainfree{width:130px;accent-color:var(--accent)}
+#gainnum{width:62px;height:28px;padding:0 8px;border:1px solid var(--bd);border-radius:7px;
+ background:var(--ctl);color:var(--fg);font:500 13px inherit;font-family:inherit;font-variant-numeric:tabular-nums}
+#rec.on{background:var(--danger);color:#fff;border-color:var(--danger)}
+#rec .dot{width:8px;height:8px;border-radius:50%;background:var(--danger)}
+#rec.on .dot{background:#fff}
+@media (max-width:700px){
+  header{padding:8px 12px;position:static}
+  #ble{margin-left:0;width:100%;justify-content:center}
+  main{padding:10px 12px 24px}
+  .grp,.grp.grow{flex:1 1 100%}
+  #c{height:260px}
+}
 .note{margin-top:12px;color:var(--dim);font-size:12px;max-width:820px}
 #interp{margin-top:16px;border:1px solid var(--line);border-radius:10px;padding:14px 16px;max-width:820px}
 #interp h2{font-size:13px;font-weight:500;margin:0 0 10px;color:var(--dim);
@@ -78,7 +120,7 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
  color:var(--dim);font-size:12px}
 </style></head><body>
 <header>
-  <h1>ECG canlı monitör <small class="stat">sürüm 26.09 17:37:23</small></h1>
+  <h1>EKG Monitör <small class="stat">sürüm 22.10 18:15:39</small></h1>
   <div class="hr"><span id="hr">--</span> <small>atım/dk</small></div>
   <span id="lead" class="pill bad">elektrot yok</span>
   <span id="mode" class="pill ok">canlı</span>
@@ -96,61 +138,99 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
   <canvas id="c" width="1600" height="720"></canvas>
   <canvas id="r" width="1600" height="200"></canvas>
   <input type="range" id="pos" min="0" max="0" value="0">
-  <div class="row">
-    <span>süpürme</span>
-    <span class="seg" id="sweep">
-      <button data-v="12.5">12,5 mm/sn</button>
-      <button data-v="25" class="on">25 mm/sn</button>
-      <button data-v="50">50 mm/sn</button>
-      <button data-v="100">100 mm/sn</button>
-      <button data-v="200">200 mm/sn</button>
-    </span>
-    <span>kazanç</span>
-    <span class="seg" id="gain">
-      <button data-v="5">5 mm/mV</button>
-      <button data-v="10" class="on">10 mm/mV</button>
-      <button data-v="20">20 mm/mV</button>
-    </span>
-    <span>fare</span>
-    <span class="seg" id="tool">
-      <button data-v="pan" class="on">gezin</button>
-      <button data-v="cal">kaliper</button>
-    </span>
-    <button id="pause">duraklat</button>
-    <button id="live">canlıya dön</button>
-    <button id="ptbtn">P/T gizle</button>
-    <button id="calclr">kaliperi sil</button>
-    <button id="rec">● kayıt başlat</button>
-    <button id="dl" disabled>kaydı indir</button>
-<button id="dlprev" hidden>önceki kayıt</button>
-    <span class="stat" id="recstat"></span>
-    <span class="seg" id="theme">
-      <button data-v="paper" class="on">kağıt</button>
-      <button data-v="mon">monitör</button>
-    </span>
+  <div class="toolbar">
+    <section class="grp">
+      <h3>Akış</h3>
+      <div class="ctl">
+        <button id="pause" class="primary" title="Boşluk tuşu">duraklat</button>
+        <button id="live" title="en son veriye dön">canlıya dön</button>
+      </div>
+      <div class="ctl">
+        <button id="rec"><span class="dot"></span><span class="t">kayıt başlat</span></button>
+        <button id="dl" disabled>kaydı indir</button>
+        <button id="dlprev" hidden>önceki kayıt</button>
+      </div>
+      <span class="stat" id="recstat"></span>
+    </section>
+    <section class="grp grow">
+      <h3>Görünüm</h3>
+      <div class="ctl">
+        <span class="lab">Süpürme</span>
+        <span class="seg" id="sweep">
+          <button data-v="12.5">12,5</button>
+          <button data-v="25" class="on">25</button>
+          <button data-v="50">50</button>
+          <button data-v="100">100</button>
+          <button data-v="200">200</button>
+        </span>
+        <span class="unit">mm/sn</span>
+      </div>
+      <div class="ctl">
+        <span class="lab">Kazanç</span>
+        <span class="seg" id="gain">
+          <button data-v="2.5">2,5</button>
+          <button data-v="5">5</button>
+          <button data-v="10" class="on">10</button>
+          <button data-v="20">20</button>
+          <button data-v="40">40</button>
+        </span>
+        <input type="range" id="gainfree" min="0" max="1" step="0.001" value="0.5"
+               title="serbest kazanç (logaritmik, 1-100 mm/mV)">
+        <input type="number" id="gainnum" min="1" max="100" step="0.5" value="10"
+               title="kazanç, mm/mV"><span class="unit">mm/mV</span>
+      </div>
+      <div class="ctl">
+        <span class="lab">Büyüt</span>
+        <span class="seg" id="zoomctl">
+          <button data-v="out" title="uzaklaştır (− tuşu)">−</button>
+          <button data-v="reset" id="zoomlbl" title="sıfırla (0 tuşu)">×1</button>
+          <button data-v="in" title="yakınlaştır (+ tuşu, ya da Ctrl/⌘ + tekerlek)">+</button>
+        </span>
+      </div>
+    </section>
+    <section class="grp">
+      <h3>Ölçüm</h3>
+      <div class="ctl">
+        <span class="lab">Fare</span>
+        <span class="seg" id="tool">
+          <button data-v="pan" class="on">gezin</button>
+          <button data-v="cal">kaliper</button>
+        </span>
+        <button id="calclr">kaliperi sil</button>
+      </div>
+      <div class="ctl">
+        <span class="lab">İşaretler</span>
+        <button id="ptbtn" class="tog on" title="P ve T tepeleri, dalga sınırları, ölçüm satırı">P/T</button>
+        <button id="calbtn" class="tog on" title="PR / QRS / QT'nin her atımda nereden ölçüldüğünü dikey çizgilerle gösterir">aralık çizgileri</button>
+      </div>
+      <div class="ctl">
+        <span class="lab">QTc</span>
+        <span class="seg" id="qtcsel">
+          <button data-v="F">Fridericia</button>
+          <button data-v="B">Bazett</button>
+          <button data-v="Fr">Framingham</button>
+          <button data-v="H">Hodges</button>
+        </span>
+      </div>
+    </section>
+    <section class="grp">
+      <h3>Cihaz</h3>
+      <div class="ctl">
+        <span class="lab" title="AD8232 modülünün toplam kazancı: genlik (mV) buna göre hesaplanır">Ön uç</span>
+        <span class="seg" id="hwgain">
+          <button data-v="100">×100 XIAO</button>
+          <button data-v="1100">×1100 CrowPanel</button>
+        </span>
+      </div>
+      <div class="ctl">
+        <span class="lab">Tema</span>
+        <span class="seg" id="theme">
+          <button data-v="paper" class="on">kağıt</button>
+          <button data-v="mon">monitör</button>
+        </span>
+      </div>
+    </section>
   </div>
-  <section id="leads">
-    <h2>3 derivasyon: sırayla alınır, eşzamanlı değildir (cihazda tek kanal var)</h2>
-    <div class="row" style="margin-top:0">
-      <span>elektrotlar hangi derivasyonda</span>
-      <span class="seg" id="leadsel">
-        <button data-v="I">I</button>
-        <button data-v="II" class="on">II</button>
-        <button data-v="III">III</button>
-      </span>
-      <button id="stripcap">10 sn şerit al</button>
-      <button id="stripclr">şeritleri sil</button>
-      <span class="stat" id="stripstat"></span>
-    </div>
-    <div id="leadhint"></div>
-    <table id="leadtab">
-      <tr><th>derivasyon</th><th>kırmızı</th><th>sarı</th><th>yeşil</th></tr>
-      <tr data-l="I"><td>I</td><td>sağ kol</td><td>sol kol</td><td>sağ bacak</td></tr>
-      <tr data-l="II"><td>II</td><td>sağ kol</td><td>sol bacak / sol alt karın</td><td>sağ bacak</td></tr>
-      <tr data-l="III"><td>III</td><td>sol kol</td><td>sol bacak / sol alt karın</td><td>sağ bacak</td></tr>
-    </table>
-    <canvas id="lc" width="1060" height="360"></canvas>
-  </section>
   <section id="interp">
     <h2>canlı ön değerlendirme <span id="iq" class="flag f-warn">bekleniyor</span>
       <span class="ev" id="iwin"></span></h2>
@@ -188,6 +268,22 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
       <button id="hrvrep" disabled>rapor indir</button>
       <span class="stat" id="hrvstat"></span>
     </div>
+    <div class="row" title="Kubios HRV eşik filtresi: her RR yerel medyanla karşılaştırılır; eşik 60/dk için saniye, hıza göre ölçeklenir (0,25 sn = %25)">
+      <span>artefakt eşiği</span>
+      <span class="seg" id="hrvthr">
+        <button data-v="vlow">çok düşük 0,45</button>
+        <button data-v="low">düşük 0,35</button>
+        <button data-v="med">orta 0,25</button>
+        <button data-v="def">varsayılan %20</button>
+        <button data-v="strong">güçlü 0,15</button>
+        <button data-v="vstrong">çok güçlü 0,05</button>
+      </span>
+      <span>düzeltme</span>
+      <span class="seg" id="hrvmeth">
+        <button data-v="delete" title="artefakt ve ektopi aralıkları atılır; ardışık farklar yalnız gerçek komşulardan">sil</button>
+        <button data-v="interp" title="Kubios gibi: işaretli aralık kalan NN'lerden kübik spline ile yeniden kestirilir">interpolasyon</button>
+      </span>
+    </div>
     <div id="hrvres"></div>
     <canvas id="hrvc" width="1060" height="300" hidden></canvas>
     <div class="idisc">Ölçümden önce 5 dk sırtüstü dinlenme; konuşma, hareket yok; son 2 saatte
@@ -209,8 +305,30 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
   Üçgenler otomatik bulunan R tepeleri, altlarındaki parantezler RR aralığı (ms).
   Halkalar P/T tepeleri; küçük köşeli parantezler dalga başlangıç [ ve bitişleri ]
   (P yeşil, QRS siyah, T mor). Başlıktaki PR/QRS/QT/QTc/Tp-e görünen pencerenin
-  medyanıdır (QTc Fridericia). İz sıfır fazlı işlenir (medyan taban + 40 Hz), bu
+  medyanıdır (QTc formülü düğmeyle seçilir, varsayılan Fridericia). İz sıfır fazlı işlenir (medyan taban + 40 Hz), bu
   yüzden ekran gerçek zamandan ~0,5 sn geridedir.</div>
+  <section id="leads">
+    <h2>3 derivasyon: sırayla alınır, eşzamanlı değildir (cihazda tek kanal var)</h2>
+    <div class="row" style="margin-top:0">
+      <span>elektrotlar hangi derivasyonda</span>
+      <span class="seg" id="leadsel">
+        <button data-v="I">I</button>
+        <button data-v="II" class="on">II</button>
+        <button data-v="III">III</button>
+      </span>
+      <button id="stripcap">10 sn şerit al</button>
+      <button id="stripclr">şeritleri sil</button>
+      <span class="stat" id="stripstat"></span>
+    </div>
+    <div id="leadhint"></div>
+    <table id="leadtab">
+      <tr><th>derivasyon</th><th>kırmızı</th><th>sarı</th><th>yeşil</th></tr>
+      <tr data-l="I"><td>I</td><td>sağ kol</td><td>sol kol</td><td>sağ bacak</td></tr>
+      <tr data-l="II"><td>II</td><td>sağ kol</td><td>sol bacak / sol alt karın</td><td>sağ bacak</td></tr>
+      <tr data-l="III"><td>III</td><td>sol kol</td><td>sol bacak / sol alt karın</td><td>sağ bacak</td></tr>
+    </table>
+    <canvas id="lc" width="1060" height="360"></canvas>
+  </section>
 </main>
 <script>
 // qrs.js: akis tabanli QRS tespiti (Pan & Tompkins 1985, IEEE TBME 32:230).
@@ -579,6 +697,11 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
 
   const LF = [0.04, 0.15], HF = [0.15, 0.40];   // Hz, Task Force 1996
   const ART_TOL = 0.20;                          // yerel medyandan %20 sapma = artefakt
+  // Kubios HRV "threshold filter" seviyeleri: 60/dk'da saniye cinsinden esik,
+  // hiza gore olceklenir; yani yerel ortalama RR'nin kesri. 0.25 sn = %25.
+  // (Tarvainen ve ark. 2014, Comput Methods Programs Biomed 113:210; Kubios
+  // kullanim kilavuzu.) 'def' bu modulun kendi %20 esigi.
+  const ART_LEVELS = { vlow: 0.45, low: 0.35, med: 0.25, def: ART_TOL, strong: 0.15, vstrong: 0.05 };
   const ART_WIN = 5;                             // yerel medyan: her yanda 5 NN
 
   // 3 noktali parabol ile tepe zamanini alt ornek duzeyinde incelt. 250 Hz'de
@@ -629,7 +752,8 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
   // olcut zamanlamadir: N olmayan atimin kuplaj ve sonraki araligi yerel
   // medyanin +-ART_TOL icindeyse (erken degil, kompansatuvar yok) N sayilir.
   // Erken ektopi ve kompansatuvar duraklama yine disarida kalir.
-  function relabelByTiming(times, cls) {
+  function relabelByTiming(times, cls, tol) {
+    tol = tol || ART_TOL;
     const c = [...cls];
     let n = 0;
     for (let k = 1; k + 1 < times.length; k++) {
@@ -639,14 +763,46 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
         if (j !== k && j !== k + 1) loc.push(times[j] - times[j - 1]);
       if (loc.length < 3) continue;
       const m = median(loc), a = times[k] - times[k - 1], b = times[k + 1] - times[k];
-      if (Math.abs(a - m) <= ART_TOL * m && Math.abs(b - m) <= ART_TOL * m) { c[k] = 'N'; n++; }
+      if (Math.abs(a - m) <= tol * m && Math.abs(b - m) <= tol * m) { c[k] = 'N'; n++; }
     }
     return { cls: c, relabeled: n };
   }
 
-  function nnSeries(times0, cls0) {
+  // Dogal kubik spline: (xs, ys) dugumlerinden xq noktalarinda deger.
+  function splineAt(xs, ys, xq) {
+    const n = xs.length;
+    if (n === 1) return xq.map(() => ys[0]);
+    const h = [], al = [0], l = [1], mu = [0], z = [0], c = new Array(n).fill(0), b = [], d = [];
+    for (let i = 0; i < n - 1; i++) h.push(xs[i + 1] - xs[i]);
+    for (let i = 1; i < n - 1; i++)
+      al.push(3 / h[i] * (ys[i + 1] - ys[i]) - 3 / h[i - 1] * (ys[i] - ys[i - 1]));
+    for (let i = 1; i < n - 1; i++) {
+      l.push(2 * (xs[i + 1] - xs[i - 1]) - h[i - 1] * mu[i - 1]);
+      mu.push(h[i] / l[i]); z.push((al[i] - h[i - 1] * z[i - 1]) / l[i]);
+    }
+    for (let j = n - 2; j >= 0; j--) {
+      c[j] = z[j] - mu[j] * c[j + 1];             // z[0]=mu[0]=0 -> c[0]=0 (dogal uc)
+      b[j] = (ys[j + 1] - ys[j]) / h[j] - h[j] * (c[j + 1] + 2 * c[j]) / 3;
+      d[j] = (c[j + 1] - c[j]) / (3 * h[j]);
+    }
+    return xq.map(x => {
+      let k = 0;
+      while (k < n - 2 && x > xs[k + 1]) k++;
+      const dx = x - xs[k];
+      return ys[k] + b[k] * dx + c[k] * dx * dx + d[k] * dx * dx * dx;
+    });
+  }
+
+  // opts.tol: yerel medyandan izin verilen sapma kesri (ART_LEVELS), varsayilan
+  // ART_TOL. opts.method: 'delete' (atilir; ardisik farklar yalniz gercek komsu
+  // NN'lerden) ya da 'interp' (Kubios gibi: isaretli aralik, kalan NN'lerden
+  // kubik spline ile yeniden kestirilir; seri kesintisiz kalir). Uclardaki
+  // isaretli araliklar interpolasyonla tahmin edilemez, her iki yontemde atilir.
+  function nnSeries(times0, cls0, opts) {
+    opts = opts || {};
+    const tol = opts.tol || ART_TOL, method = opts.method === 'interp' ? 'interp' : 'delete';
     const x = dropExtraBeats(times0, cls0), times = x.times;
-    const rl = relabelByTiming(times, x.cls), cls = rl.cls;
+    const rl = relabelByTiming(times, x.cls, tol), cls = rl.cls;
     const raw = [];
     for (let i = 1; i < times.length; i++) {
       // mikrosaniyeye yuvarla: kayan nokta birikimi 50 ms esigini yanlis gecirmesin
@@ -657,14 +813,26 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
     const kept = cand.filter((r, k) => {
       const lo = Math.max(0, k - ART_WIN), hi = Math.min(cand.length, k + ART_WIN + 1);
       const m = median(cand.slice(lo, hi).map(c => c.rr));
-      return Math.abs(r.rr - m) <= ART_TOL * m;
+      return Math.abs(r.rr - m) <= tol * m;
     });
-    // komsuluk: iki NN ancak aradaki atim ortaksa ardisik farka girer
-    const nn = kept.map((r, k) => ({ t: r.t, rr: r.rr,
-      adj: k > 0 && kept[k - 1].idx === r.idx - 1 }));
-    // duzenleme payi: kaldirilan sahte atim + atilan aralik, orijinal aralik sayisina gore
+    let nn, corrected = 0;
+    if (method === 'interp' && kept.length >= 2) {
+      const good = new Set(kept.map(r => r.idx));
+      const t0 = kept[0].t, t1 = kept[kept.length - 1].t;
+      const span = raw.filter(r => r.t >= t0 && r.t <= t1);
+      const bad = span.filter(r => !good.has(r.idx));
+      const est = splineAt(kept.map(r => r.t), kept.map(r => r.rr), bad.map(r => r.t));
+      const fix = new Map(bad.map((r, k) => [r.idx, Math.round(est[k] * 1e3) / 1e3]));
+      corrected = bad.length;
+      nn = span.map((r, k) => ({ t: r.t, rr: good.has(r.idx) ? r.rr : fix.get(r.idx),
+        adj: k > 0, interp: !good.has(r.idx) }));
+    } else {
+      // komsuluk: iki NN ancak aradaki atim ortaksa ardisik farka girer
+      nn = kept.map((r, k) => ({ t: r.t, rr: r.rr, adj: k > 0 && kept[k - 1].idx === r.idx - 1 }));
+    }
+    // duzenleme payi: kaldirilan sahte atim + atilan/duzeltilen aralik, orijinal aralik sayisina gore
     return { nn, total: times0.length - 1, edited: x.removed + raw.length - kept.length,
-             extra: x.removed, relabeled: rl.relabeled };
+             extra: x.removed, relabeled: rl.relabeled, corrected, tol, method };
   }
 
   function timeDomain(nn) {
@@ -726,7 +894,7 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
   // Tam analiz. opts.freq: frekans bolgesini de hesapla (>= 2 dk NN gerekir).
   function analyze(times, cls, opts) {
     opts = opts || {};
-    const s = nnSeries(times, cls);
+    const s = nnSeries(times, cls, opts);
     const td = timeDomain(s.nn);
     const dur = s.nn.length ? s.nn[s.nn.length - 1].t - s.nn[0].t : 0;
     const out = { ...s, td, dur, editedPct: s.total ? s.edited / s.total : 1, fd: null };
@@ -734,11 +902,25 @@ body:not(.paper) #leadhint{background:#3a2d0f;color:#d29922}
     return out;
   }
 
-  return { refinePeak, dropExtraBeats, relabelByTiming, nnSeries, timeDomain, lombScargle, analyze, median, LF, HF };
+  return { refinePeak, dropExtraBeats, relabelByTiming, nnSeries, timeDomain, lombScargle, analyze,
+           splineAt, median, LF, HF, ART_TOL, ART_LEVELS };
 });
 
-const PAGE_BUILD='26.09 17:37:23';
+const PAGE_BUILD='22.10 18:15:39';
 const FS=250, PXMM=4, HIST=FS*300, AD_GAIN=100;
+// Cihaz ham ADC mV gonderir. Sayfa esikleri AD_GAIN=100 icin yazildi; farkli kazancli
+// on uc (CrowPanel SparkFun AD8232: 1100) girisi IN_SCALE ile bu birime cevrilir.
+// Varsayilan sayfa uretilirken gelir; "on uc" dugmesi tarayicida kalici degistirir.
+const HW_GAIN_KEY='ecg-hw-gain';
+const HW_GAIN=(()=>{
+  try{ const v=parseFloat(localStorage.getItem(HW_GAIN_KEY)); if(v>0) return v; }catch(e){}
+  return 1100;
+})();
+const IN_SCALE=AD_GAIN/HW_GAIN;
+// QTc formulu: anahtar -> [intervalStats alani, baslik kisaltmasi]; secim tarayicida saklanir.
+const QTC_FORMS={F:['qtcF','F'], B:['qtcB','B'], Fr:['qtcFr','Fram'], H:['qtcH','H']};
+const QTC_KEY='ecg-qtc';
+let qtcSel=(()=>{ try{ const v=localStorage.getItem(QTC_KEY); if(v in QTC_FORMS) return v; }catch(e){} return 'F'; })();
 const det=new QRS.QrsDetector(FS);   // akis halinde QRS tespiti; det.n === total
 const hF=new Float32Array(HIST), hR=new Float32Array(HIST);
 let head=0, total=0, mmps=25, mmmv=10, lo=1, lastData=0;
@@ -749,7 +931,8 @@ let tool='pan', lastPeaksAbs=[];
 let meas=[], ghost=null, hoverEdge=null, resizing=null;   // olcumler: {t1,t2} mutlak ornek
 let vw={start:0,n:0,w:1600};                              // son cizilen pencere
 const HIT_PX=6;
-let paper=true, epoch0=null, showPT=true;   // ilk ornegin duvar saati (ms)
+let paper=true, epoch0=null, showPT=true;
+let showCal=(()=>{ try{ return localStorage.getItem('ecg-cal')!=='0'; }catch(e){ return true; } })();   // ilk ornegin duvar saati (ms)
 let srcStatus='';                            // sunucudan gelen kaynak durumu (BLE: bagli/koptu...)
 const PAL={
   paper:{bg:'#fffaf8', minor:'#f2c9c4', major:'#e39a92', trace:'#111111',
@@ -779,7 +962,12 @@ function push(f,r){
   }
   det.trim(total-HIST);
 }
-function nSamples(){ return Math.round(1600/(mmps*PXMM)*FS); }
+// Ana izdeki buyutec: mm/sn ve mm/mV ayni kalir, mm basina piksel zoom kat buyur.
+// Seritler ve rapor etkilenmez. Sinir 0.5-8, adim x1.25.
+let zoom=1;
+const ZOOM_MIN=0.5, ZOOM_MAX=8, ZOOM_STEP=1.25;
+const pxmm=()=>PXMM*zoom;
+function nSamples(){ return Math.round(1600/(mmps*pxmm())*FS); }
 function maxAnchor(){ return Math.max(0, total-nSamples()); }
 function startAbs(){ return live ? Math.max(0,total-nSamples()) : anchor; }
 function setAnchor(v){
@@ -798,7 +986,7 @@ function setTool(t){
   if(typeof applyCursor==='function') applyCursor();
 }
 function syncPauseLabel(){
-  document.getElementById('pause').textContent = live ? 'duraklat' : 'devam';
+  document.getElementById('pause').textContent = live ? '❚❚ duraklat' : '▶ devam';
 }
 function view(buf,startAbsIdx,n){
   const out=new Float32Array(n);
@@ -811,22 +999,22 @@ function view(buf,startAbsIdx,n){
 }
 
 let gridCache=null, gridKey='';
-function gridFor(w,h){
-  const key=w+'x'+h+':'+mmps+':'+(paper?'p':'m');
+function gridFor(w,h,mm=PXMM){
+  const key=w+'x'+h+':'+mm+':'+(paper?'p':'m');
   if(gridKey===key) return gridCache;
   const P=pal();
   const g=document.createElement('canvas'); g.width=w; g.height=h;
   const x=g.getContext('2d');
   x.fillStyle=P.bg; x.fillRect(0,0,w,h);
   x.strokeStyle=P.minor; x.lineWidth=1; x.beginPath();
-  for(let px=0;px<w;px+=PXMM){const v=Math.round(px)+.5;x.moveTo(v,0);x.lineTo(v,h);}
-  for(let py=h/2;py<h;py+=PXMM){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
-  for(let py=h/2;py>0;py-=PXMM){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  for(let px=0;px<w;px+=mm){const v=Math.round(px)+.5;x.moveTo(v,0);x.lineTo(v,h);}
+  for(let py=h/2;py<h;py+=mm){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  for(let py=h/2;py>0;py-=mm){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
   x.stroke();
   x.strokeStyle=P.major; x.lineWidth=1.4; x.beginPath();
-  for(let px=0;px<w;px+=PXMM*5){const v=Math.round(px)+.5;x.moveTo(v,0);x.lineTo(v,h);}
-  for(let py=h/2;py<h;py+=PXMM*5){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
-  for(let py=h/2;py>0;py-=PXMM*5){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  for(let px=0;px<w;px+=mm*5){const v=Math.round(px)+.5;x.moveTo(v,0);x.lineTo(v,h);}
+  for(let py=h/2;py<h;py+=mm*5){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
+  for(let py=h/2;py>0;py-=mm*5){const v=Math.round(py)+.5;x.moveTo(0,v);x.lineTo(w,v);}
   x.stroke();
   gridCache=g; gridKey=key; return g;
 }
@@ -838,7 +1026,7 @@ function gridFor(w,h){
 // (200/600 ms, de Chazal 2004; sifir faz) + ileri-geri Butterworth 40 Hz
 // alcak geciren ve 49-51 Hz centik (sifir faz). Bedeli: ekran ~0.5 s geriden
 // gelir. Katsayilar sunucuda scipy butter() ile calisan fs icin uretilir.
-const SOS_LP=[[0.02287020771629096, 0.04574041543258192, 0.02287020771629096, 1.0, -0.602033202257445, 0.12355934398734861], [1.0, 2.0, 1.0, 1.0, -0.8099502989391327, 0.5115897646941701]], SOS_NOTCH=[[0.9364275523716075, -0.5789268866825257, 0.9364275523716075, 1.0, -0.5862138968923248, 0.9544706178379156], [1.0, -0.6182292321667903, 1.0, 1.0, -0.6220734003858608, 0.9547480982707564], [1.0, -0.6182292321667903, 1.0, 1.0, -0.568225570141628, 0.9808113185052092], [1.0, -0.6182292321667903, 1.0, 1.0, -0.655803917572786, 0.9810960611436458]];
+const SOS_LP=[[0.022870207716290964, 0.04574041543258193, 0.022870207716290964, 1.0, -0.602033202257445, 0.12355934398734861], [1.0, 2.0, 1.0, 1.0, -0.8099502989391327, 0.5115897646941698]], SOS_NOTCH=[[0.9364275523716079, -0.5789268866825259, 0.9364275523716079, 1.0, -0.5862138968923248, 0.9544706178379156], [1.0, -0.6182292321667903, 1.0, 1.0, -0.6220734003858608, 0.9547480982707565], [1.0, -0.6182292321667903, 1.0, 1.0, -0.568225570141628, 0.9808113185052094], [1.0, -0.6182292321667903, 1.0, 1.0, -0.655803917572786, 0.9810960611436462]];
 const ZP_H1=Math.round(0.10*FS), ZP_H2=Math.round(0.30*FS);   // medyan yarim pencereleri
 const ZP_G=Math.round(0.12*FS), ZP_M=Math.round(0.40*FS);      // IIR gecis payi: uc / bas
 const zpRaw=new Float32Array(HIST), zpM1=new Float32Array(HIST), zpY=new Float32Array(HIST);
@@ -865,7 +1053,7 @@ function sosBlock(sos,x){        // sifir durum; DC'ye gore calisir: x0 cikar, s
 function filtfilt(sos,x){ return sosBlock(sos, sosBlock(sos,x).reverse()).reverse(); }
 // Yeni ham ornekler: taban cikar, sifir fazli filtrele, hazir olanlari push() ile yayinla.
 function zpFeed(raw){
-  for(const v of raw){ zpRaw[zpN%HIST]=v; zpN++; }
+  for(const v of raw){ zpRaw[zpN%HIST]=v*IN_SCALE; zpN++; }
   while(zpM1N+ZP_H1<zpN){ zpM1[zpM1N%HIST]=medWin(zpRaw,zpM1N,ZP_H1,zpN); zpM1N++; }
   while(zpYN+ZP_H2<zpM1N){ zpY[zpYN%HIST]=zpAt(zpRaw,zpYN)-medWin(zpM1,zpYN,ZP_H2,zpM1N); zpYN++; }
   const emitTo=zpYN-ZP_G;                       // IIR uc gecisi disinda kalanlar
@@ -971,12 +1159,12 @@ function recToggle(){
     recSave=recPrune().catch(e=>{ recSaveErr=e; });
     recFlush(false);
     recTimer=setInterval(()=>recFlush(false), REC_FLUSH_MS);
-    b.textContent='■ kaydı durdur'; b.classList.add('on');
+    b.querySelector('.t').textContent='kaydı durdur'; b.classList.add('on');
     document.getElementById('dl').disabled=true;
   } else {
     clearInterval(recTimer); recTimer=null;
     recFlush(true).then(recShowPrev);
-    b.textContent='● kayıt başlat'; b.classList.remove('on');
+    b.querySelector('.t').textContent='kayıt başlat'; b.classList.remove('on');
     document.getElementById('dl').disabled = recRaw.length===0;
   }
   updateRecStat();
@@ -1002,6 +1190,8 @@ function recCsv(raw, lo, t0, fs, gap, leads){
     `# baslangic: ${t0.toISOString()}
 `,
     `# fs=${fs} Hz, ecg_mv = AD8232 cikisi (ADC mV, kalibre degil)
+`,
+    `# on uc kazanci=${HW_GAIN} (elektrottaki mV = (ecg_mv - ortalama) / ${HW_GAIN})
 `,
     `# lo: 0 temas var, 1 elektrot yok, 2 veri yok (BLE kaybi, ecg_mv bos) · veri yok toplam ${(gap/fs).toFixed(1)} sn
 `,
@@ -1538,10 +1728,14 @@ function computeInterp(endAbs){
       rows.push(['QT / QTc', 'ölçülmedi, T genliği düşük',
         `T tepe genliği ${(tAmpMed/AD_GAIN).toFixed(2)} mV (<0,10) · T/U ayrımı güvenilmez`]);
     else if(iv.qt){
-      const F=iv.qtcF, B=iv.qtcB;
+      // secili formul sayfadan (qtcSel); olcum araclarinda tanimsiz -> Fridericia
+      const sel = typeof qtcSel==='string' ? qtcSel : 'F';
+      const forms = [['F','Fridericia',iv.qtcF],['B','Bazett',iv.qtcB],['Fr','Framingham',iv.qtcFr],['H','Hodges',iv.qtcH]];
+      const F = (forms.find(x=>x[0]===sel) || forms[0])[2];
       const tag = !F ? '' : F.med>=500?', belirgin uzun (≥500)':F.med>=460?', uzun (≥460)':F.med<=340?', kısa (≤340)':', normal';
       rows.push(['QT / QTc', `${ivTxt(iv.qt)} · QTc ${F?F.med.toFixed(0):'-'}${tag}`,
-        `Fridericia ${F?F.med.toFixed(0):'-'} · Bazett ${B?B.med.toFixed(0):'-'} · T bitişi trapez alan · ${iv.qt.n} atım`]);
+        forms.map(([k,nm,o])=>`${k===sel?'<b>'+nm+'</b>':nm} ${o?o.med.toFixed(0):'-'}`).join(' · ')
+        + ` · T bitişi trapez alan · ${iv.qt.n} atım`]);
     }
     if(iv.pdur) rows.push(['P süresi',
       ivTxt(iv.pdur) + (iv.pdur.med>=120?', uzun (≥120)':', normal'), `${iv.pdur.n} atım`]);
@@ -1899,14 +2093,17 @@ function robustStat(vals){
   const sd=Math.sqrt(keep.reduce((a,b)=>a+(b-mean)**2,0)/Math.max(1,keep.length-1));
   return {med:median(keep), sd, n:keep.length};
 }
-// QTc atim basina onceki RR ile: Fridericia (QT/RR^1/3, AHA 2009 Bazett yerine
-// onerilenlerden) ve Bazett (QT/RR^1/2, yaygin ama hizda sapar).
+// QTc atim basina onceki RR ile (QT, RR ms): Fridericia QT/RR^1/3 (AHA 2009 Bazett
+// yerine onerilenlerden, varsayilan), Bazett QT/RR^1/2 (yaygin ama hizda sapar),
+// Framingham QT+154(1-RR) (Sagie 1992), Hodges QT+1.75(KH-60) (Hodges 1983).
+// Sayfadaki "QTc" dugmesi hangisinin gosterilecegini secer.
 function intervalStats(del){
   const st=k=>robustStat(del.map(b=>b[k]));
-  const qtcOf=(pow)=>robustStat(del.map(b=>(b.qt!==null&&b.rr!==null&&b.rr>300)? b.qt/Math.pow(b.rr/1000,pow) : null));
+  const qtcBy=fn=>robustStat(del.map(b=>(b.qt!==null&&b.rr!==null&&b.rr>300)? fn(b.qt, b.rr/1000) : null));
   const qt=st('qt'), tpe=st('tpe');
   return {pr:st('pr'), qrs:st('qrs'), qt, pdur:st('pdur'), tpe,
-          qtcF:qtcOf(1/3), qtcB:qtcOf(1/2),
+          qtcF:qtcBy((q,r)=>q/Math.cbrt(r)), qtcB:qtcBy((q,r)=>q/Math.sqrt(r)),
+          qtcFr:qtcBy((q,r)=>q+154*(1-r)), qtcH:qtcBy((q,r)=>q+1.75*(60/r-60)),
           tpeRatio:(qt&&tpe)? tpe.med/qt.med : null};
 }
 
@@ -1925,6 +2122,47 @@ function calcPeaks(start,n){
 const cF=document.getElementById('c'), cR=document.getElementById('r');
 const posEl=document.getElementById('pos');
 
+// Aralik kaliperleri (CrowPanel ekrani gibi): her atimda Pon / Q / J / Te noktali
+// dikey cizgileri ve altta PR (Pon-Q), QRS (Q-J), QT (Q-Te) yatay kaliperleri, ms
+// etiketiyle. Olcum basliktaki medyanin tek tek atimlardaki kaynagini gosterir.
+// T genligi dusukse QT ve Te cizilmez (baslikta da verilmez).
+function drawCalipers(ctx, del, n, w, h, tLow){
+  const P=pal(), X=i=>Math.round(w*i/(n-1))+.5, ok=i=>i!==null && i>=0 && i<n;
+  ctx.save();
+  ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.font='10px -apple-system,sans-serif'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  const top=18, bot=h-96;
+  for(const b of del){
+    const lines=[[b.pOn,P.pcol,'Pon',0],[b.qOn,P.peak,'Q',1],[b.qOff,P.peak,'J',0]];
+    if(!tLow) lines.push([b.tEnd,P.tcol,'Te',0]);
+    for(const [i,col,tag,row] of lines){
+      if(!ok(i)) continue;
+      const x=X(i);
+      ctx.strokeStyle=col; ctx.fillStyle=col;
+      ctx.beginPath(); ctx.moveTo(x,top); ctx.lineTo(x,bot); ctx.stroke();
+      ctx.fillText(tag, x, top-2-row*11);
+    }
+  }
+  ctx.setLineDash([]); ctx.lineWidth=1.3;
+  ctx.font='bold 11px -apple-system,sans-serif';
+  const bars=[['pr','pOn','qOn',P.pcol,h-90],['qrs','qOn','qOff',P.peak,h-76]];
+  if(!tLow) bars.push(['qt','qOn','tEnd',P.tcol,h-62]);
+  for(const b of del){
+    for(const [k,a,c,col,y] of bars){
+      if(b[k]===null || !ok(b[a]) || !ok(b[c])) continue;
+      const xa=X(b[a]), xb=X(b[c]);
+      ctx.strokeStyle=col; ctx.fillStyle=col;
+      ctx.beginPath();
+      ctx.moveTo(xa,y); ctx.lineTo(xb,y);
+      ctx.moveTo(xa,y-3); ctx.lineTo(xa,y+3);
+      ctx.moveTo(xb,y-3); ctx.lineTo(xb,y+3);
+      ctx.stroke();
+      const txt=b[k].toFixed(0);
+      if(ctx.measureText(txt).width < xb-xa+30) ctx.fillText(txt, (xa+xb)/2, y-2);
+    }
+  }
+  ctx.restore();
+}
 function draw(){
   const stale = live && lastData>0 && (performance.now()-lastData)>1500;
   const n=nSamples(), start=startAbs();
@@ -1933,9 +2171,9 @@ function draw(){
   const P=pal();
   const w=cF.width, h=cF.height, mid=h/2, ctx=cF.getContext('2d');
   ctx.clearRect(0,0,w,h);
-  ctx.drawImage(gridFor(w,h),0,0);
+  ctx.drawImage(gridFor(w,h,pxmm()),0,0);
 
-  const yScale=mmmv*PXMM/AD_GAIN;
+  const yScale=mmmv*pxmm()/AD_GAIN;
   ctx.strokeStyle = stale ? P.off : (!live ? P.review : (lo ? P.off : P.trace));
   ctx.lineWidth=2; ctx.lineJoin='round'; ctx.beginPath();
   for(let i=0;i<n;i++){
@@ -1945,7 +2183,7 @@ function draw(){
   ctx.stroke();
 
   // zaman ekseni: ~90 px'den seyrek olmayan "yuvarlak" aralik sec
-  const pxPerS=mmps*PXMM;
+  const pxPerS=mmps*pxmm();
   let tick=[0.02,0.04,0.1,0.2,0.5,1,2,5,10,30].find(v=>v*pxPerS>=90) || 30;
   const p2=v=>String(v).padStart(2,'0');
   const fmtT=abs=>{
@@ -1991,26 +2229,30 @@ function draw(){
         ctx.fillText(lab, x, y-6);
       }
     }
-    // dalga sinirlari: baslangic "[" ve bitis "]" seklinde kucuk parantezler
     const del=delineate(f,pk,pt);
-    ctx.lineWidth=1.5;
-    for(const b of del){
-      for(const [on,off,col] of [[b.pOn,b.pOff,P.pcol],[b.qOn,b.qOff,P.peak],[b.tOn,b.tEnd,P.tcol]]){
-        ctx.strokeStyle=col;
-        for(const [i,dir] of [[on,1],[off,-1]]){
-          if(i===null || i<0 || i>=n) continue;
-          const x=Math.round(w*i/(n-1))+.5, y=mid-f[i]*yScale;
-          ctx.beginPath(); ctx.moveTo(x,y-8); ctx.lineTo(x,y+8);
-          ctx.moveTo(x,y-8); ctx.lineTo(x+4*dir,y-8);
-          ctx.moveTo(x,y+8); ctx.lineTo(x+4*dir,y+8); ctx.stroke();
+    const tLowBeat = !pt.tAmp.length || median(pt.tAmp) < 10;
+    if(showCal) drawCalipers(ctx, del, n, w, h, tLowBeat);
+    else {
+      // dalga sinirlari: baslangic "[" ve bitis "]" seklinde kucuk parantezler
+      ctx.lineWidth=1.5;
+      for(const b of del){
+        for(const [on,off,col] of [[b.pOn,b.pOff,P.pcol],[b.qOn,b.qOff,P.peak],[b.tOn,b.tEnd,P.tcol]]){
+          ctx.strokeStyle=col;
+          for(const [i,dir] of [[on,1],[off,-1]]){
+            if(i===null || i<0 || i>=n) continue;
+            const x=Math.round(w*i/(n-1))+.5, y=mid-f[i]*yScale;
+            ctx.beginPath(); ctx.moveTo(x,y-8); ctx.lineTo(x,y+8);
+            ctx.moveTo(x,y-8); ctx.lineTo(x+4*dir,y-8);
+            ctx.moveTo(x,y+8); ctx.lineTo(x+4*dir,y+8); ctx.stroke();
+          }
         }
       }
     }
     const iv=intervalStats(del), fm=o=>o?o.med.toFixed(0):'-';
-    const tLow = !pt.tAmp.length || median(pt.tAmp) < 10;   // T <0.10 mV: QT verme
+    const tLow = tLowBeat;                                  // T <0.10 mV: QT verme
     if(iv.pr||iv.qrs||iv.qt)
       ivTxt=`PR ${fm(iv.pr)} · QRS ${fm(iv.qrs)} · ` + (tLow ? 'QT, (T genliği düşük)'
-            : `QT ${fm(iv.qt)} · QTc ${fm(iv.qtcF)} · Tp-e ${fm(iv.tpe)}`) + ' ms';
+            : `QT ${fm(iv.qt)} · QTc${QTC_FORMS[qtcSel][1]} ${fm(iv[QTC_FORMS[qtcSel][0]])} · Tp-e ${fm(iv.tpe)}`) + ' ms';
   }
   document.getElementById('ivals').textContent=ivTxt;
 
@@ -2182,6 +2424,14 @@ function draw(){
 const HRV_LIVE_S=60, HRV_MEAS_S=300, HRV_MAX_EDIT=0.05;
 const HRV_REF={sdnn:[32,93], rmssd:[19,75]};          // Nunan 2010, ms
 let hrvRun=null, hrvLast=null;
+// Artefakt duzeltme ayari (HRV.ART_LEVELS anahtari + yontem); tarayicida saklanir.
+const HRV_OPT_KEY='ecg-hrv-opt';
+let hrvOpt=(()=>{ try{ const o=JSON.parse(localStorage.getItem(HRV_OPT_KEY)||'{}');
+  if(o.level in HRV.ART_LEVELS && (o.method==='delete'||o.method==='interp')) return o; }catch(e){}
+  return {level:'def', method:'delete'}; })();
+const hrvAnOpt=extra=>({...extra, tol:HRV.ART_LEVELS[hrvOpt.level], method:hrvOpt.method});
+// sonucun kendi ayari (olcum sonrasi dugme degisse de rapor dogru kalsin)
+const hrvOptTxt=a=>`artefakt eşiği ${a.tol===HRV.ART_TOL?'%20 (varsayılan)':a.tol.toFixed(2)+' sn'} · ${a.method==='interp'?'interpolasyon':'silme'}`;
 function hrvBeats(startAbs, n){
   const f=view(hF,startAbs,n), pk=det.peaksIn(startAbs,n), bc=classifyBeats(f,pk);
   return {times:pk.map(i=>(startAbs+HRV.refinePeak(f,i))/FS), cls:bc.cls};
@@ -2199,7 +2449,7 @@ function hrvLiveTick(){
   if(lo || total<HRV_LIVE_S*FS){ el.textContent=`son ${HRV_LIVE_S} sn bekleniyor`; return; }
   const why=hrvGate();
   if(why){ el.textContent='HRV hesaplanmadı: '+why; return; }
-  const n=HRV_LIVE_S*FS, b=hrvBeats(total-n, n), a=HRV.analyze(b.times, b.cls);
+  const n=HRV_LIVE_S*FS, b=hrvBeats(total-n, n), a=HRV.analyze(b.times, b.cls, hrvAnOpt());
   if(!a.td || a.td.rmssd===null){ el.textContent='HRV hesaplanmadı: yeterli N→N aralığı yok'; return; }
   if(a.editedPct>HRV_MAX_EDIT){
     el.textContent=`HRV hesaplanmadı: aralıkların %${(a.editedPct*100).toFixed(0)}'i ektopi/artefakt (sınır %5)`;
@@ -2227,7 +2477,7 @@ function hrvMeasTick(){
   hrvRun=null;
   const btn=document.getElementById('hrvbtn'); btn.classList.remove('on'); btn.textContent='5 dk HRV ölçümü';
   const startAbs=Math.max(r.start, total-HIST+FS), n=total-startAbs;
-  const b=hrvBeats(startAbs, n), a=HRV.analyze(b.times, b.cls, {freq:true});
+  const b=hrvBeats(startAbs, n), a=HRV.analyze(b.times, b.cls, hrvAnOpt({freq:true}));
   const why = r.af ? `pencerelerin ${r.af}'inde AF ile uyumlu ritim`
     : r.nonSinus>0.2*r.wins ? "sinüs ritmi sürenin %80'inden azında doğrulandı"
     : r.bad>0.2*r.wins ? "sinyal sürenin %20'sinden fazlasında değerlendirilemedi"
@@ -2248,7 +2498,8 @@ function hrvRender(){
   const t=a.td, fd=a.fd, f0=v=>v===null?'-':v.toFixed(0), f1=v=>v===null?'-':v.toFixed(1);
   const ref=k=>`<td class="r">sağlıklı erişkin ${HRV_REF[k][0]}–${HRV_REF[k][1]} ms</td>`;
   const rows=[
-    ['süre', `${(a.dur/60).toFixed(1)} dk · ${t.n} N→N · düzenlenen %${(a.editedPct*100).toFixed(1)}`,''],
+    ['süre', `${(a.dur/60).toFixed(1)} dk · ${t.n} N→N · düzenlenen %${(a.editedPct*100).toFixed(1)}`
+      + (a.method==='interp' ? ` (${a.corrected} aralık interpole)` : ''), `<td class="r">${hrvOptTxt(a)}</td>`],
     ['ort. KH / RR', `${t.hr.toFixed(0)}/dk · ${t.meanRR.toFixed(0)} ms`,''],
     ['SDNN', `${f0(t.sdnn)} ms`, ref('sdnn')],
     ['RMSSD', `${f0(t.rmssd)} ms`, ref('rmssd')],
@@ -2299,6 +2550,8 @@ function hrvSummary(a){                              // [etiket, deger, birim] s
     ['sure', r(a.dur/60,2), 'dk'], ['NN_sayisi', t.n, ''], ['toplam_aralik', a.total, ''],
     ['duzenlenen', r(a.editedPct*100,2), '%'], ['sahte_atim_kaldirilan', a.extra, ''],
     ['zamanlamadan_N_sayilan', a.relabeled, ''],
+    ['artefakt_esigi', r(a.tol,2), 'RR kesri'], ['duzeltme_yontemi', a.method, ''],
+    ['interpole_aralik', a.corrected, ''],
     ['ort_KH', r(t.hr), '/dk'], ['ort_RR', r(t.meanRR), 'ms'],
     ['SDNN', r(t.sdnn), 'ms'], ['RMSSD', r(t.rmssd), 'ms'], ['pNN50', r(t.pnn50*100), '%'],
     ['SD1', r(t.sd1), 'ms'], ['SD2', r(t.sd2), 'ms'],
@@ -2316,9 +2569,11 @@ function hrvCsv(){
     ...hrvSummary(a).map(([k,v,u])=>`# ${k}=${v}${u?' '+u:''}
 `),
     `# adj=1: onceki NN ile ardisik (RMSSD/pNN50 farklari yalniz bunlardan)
-`, `t_s,rr_ms,adj
+`,
+    `# interp=1: aralik kubik spline ile kestirildi (olculmedi)
+`, `t_s,rr_ms,adj,interp
 `];
-  const rows=a.nn.map(v=>`${v.t.toFixed(4)},${v.rr.toFixed(1)},${v.adj?1:0}
+  const rows=a.nn.map(v=>`${v.t.toFixed(4)},${v.rr.toFixed(1)},${v.adj?1:0},${v.interp?1:0}
 `);
   saveFile(new Blob([...head, ...rows],{type:'text/csv'}), `hrv-${hrvStamp(a.startAt)}.csv`);
 }
@@ -2348,6 +2603,10 @@ LF/HF oranı yorumlanmaz (Billman 2013). Kalibre edilmemiş tek derivasyonlu cih
 document.getElementById('hrvcsv').onclick=hrvCsv;
 document.getElementById('hrvrep').onclick=hrvReport;
 document.getElementById('hrvbtn').onclick=hrvStart;
+for(const [id,k] of [['hrvthr','level'],['hrvmeth','method']]){
+  for(const b of document.getElementById(id).children) b.classList.toggle('on', b.dataset.v===hrvOpt[k]);
+  seg(id, v=>{ hrvOpt={...hrvOpt, [k]:v}; try{ localStorage.setItem(HRV_OPT_KEY, JSON.stringify(hrvOpt)); }catch(e){} });
+}
 setInterval(()=>{ try{ hrvLiveTick(); hrvMeasTick(); }
   catch(e){ document.getElementById('hrvlive').textContent='HRV hatası: '+e; } }, 1000);
 
@@ -2437,6 +2696,7 @@ draw();
 
 cF.onwheel=e=>{
   e.preventDefault();
+  if(e.ctrlKey || e.metaKey){ setZoom(zoom*(e.deltaY<0?ZOOM_STEP:1/ZOOM_STEP)); return; }
   setAnchor(startAbs() + Math.sign(e.deltaY)*Math.round(nSamples()*0.15));
 };
 function seg(id,set){
@@ -2529,6 +2789,7 @@ function commitGhost(){
 }
 cF.onwheel=e=>{
   e.preventDefault();
+  if(e.ctrlKey || e.metaKey){ setZoom(zoom*(e.deltaY<0?ZOOM_STEP:1/ZOOM_STEP)); return; }
   setAnchor(startAbs() + Math.sign(e.deltaY)*Math.round(nSamples()*0.15));
 };
 cF.onmousedown=e=>{
@@ -2591,7 +2852,7 @@ document.getElementById('dl').onclick=recDownload;
 document.getElementById('dlprev').onclick=recDownloadPrev;
 recShowPrev();
 document.getElementById('ptbtn').onclick=e=>{
-  showPT=!showPT; e.target.textContent = showPT ? 'P/T gizle' : 'P/T göster';
+  showPT=!showPT; e.currentTarget.classList.toggle('on', showPT);
 };
 seg('tool',v=>{ setTool(v); hoverEdge=null; });
 seg('theme',v=>{ paper=(v==='paper'); gridKey='';
@@ -2599,16 +2860,83 @@ seg('theme',v=>{ paper=(v==='paper'); gridKey='';
 document.body.classList.add('paper');
 document.getElementById('live').onclick=goLive;
 document.getElementById('pause').onclick=()=>{ live?setAnchor(total-nSamples()):goLive(); };
+// Bosluk: akisi durdur / devam (her yerde; basili tutunca tekrar etmez).
+// Odakta dugme varsa tarayici bosluguyla onu da tiklardi: odak birakilir,
+// keyup'ta da varsayilan engellenir. Oklar kazanc kutusunda/kaydiricisinda
+// o ogenin kendi isini yapar, izi kaydirmaz.
 window.addEventListener('keydown', e=>{
+  if(e.key===' '){
+    e.preventDefault();
+    if(e.repeat) return;
+    if(e.target instanceof HTMLElement && e.target!==document.body) e.target.blur();
+    live?setAnchor(total-nSamples()):goLive();
+    return;
+  }
+  if(e.target.tagName==='INPUT' && e.target.id!=='pos') return;
   const step=Math.round(nSamples()*(e.shiftKey?0.5:0.1));
   if(e.key==='ArrowLeft'){ setAnchor(startAbs()-step); e.preventDefault(); }
   else if(e.key==='ArrowRight'){ setAnchor(startAbs()+step); e.preventDefault(); }
-  else if(e.key===' '){ live?setAnchor(total-nSamples()):goLive(); e.preventDefault(); }
   else if(e.key==='Escape'){ meas=[]; ghost=null; }
   else if((e.key==='z'||e.key==='Z') && (e.metaKey||e.ctrlKey)){ meas.pop(); e.preventDefault(); }
 });
+function syncCalBtn(){ document.getElementById('calbtn').classList.toggle('on', showCal); }
+syncCalBtn();
+document.getElementById('calbtn').onclick=()=>{
+  showCal=!showCal; syncCalBtn();
+  try{ localStorage.setItem('ecg-cal', showCal?'1':'0'); }catch(e){}
+};
+// Duraklatilmisken gorunen pencerenin ortasi sabit kalir; canlida son ornek sagda.
+function setZoom(z){
+  z=Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  if(Math.abs(z-1)<0.02) z=1;
+  const center=startAbs()+nSamples()/2;
+  zoom=z;
+  document.getElementById('zoomlbl').textContent='×'+(+zoom.toFixed(2));
+  if(!live) setAnchor(center-nSamples()/2);
+}
+document.getElementById('zoomctl').onclick=e=>{
+  const v=e.target.dataset && e.target.dataset.v; if(!v) return;
+  setZoom(v==='in' ? zoom*ZOOM_STEP : v==='out' ? zoom/ZOOM_STEP : 1);
+};
+window.addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT' || e.metaKey || e.ctrlKey) return;   // tarayici yakinlastirmasina dokunma
+  if(e.key==='+' || e.key==='='){ setZoom(zoom*ZOOM_STEP); e.preventDefault(); }
+  else if(e.key==='-' || e.key==='_'){ setZoom(zoom/ZOOM_STEP); e.preventDefault(); }
+  else if(e.key==='0'){ setZoom(1); e.preventDefault(); }
+});
+window.addEventListener('keyup', e=>{ if(e.key===' ') e.preventDefault(); });
 seg('sweep',v=>{ mmps=parseFloat(v); gridKey=''; });
-seg('gain',v=>{ mmmv=parseFloat(v); });
+// Ekran kazanci: hazir dugmeler + serbest ayar (kaydirici logaritmik 1-100 mm/mV,
+// kutuya dogrudan sayi). Ucu ayni degeri gosterir; secim tarayicida saklanir.
+const GAIN_MIN=1, GAIN_MAX=100, GAIN_KEY='ecg-mmmv';
+const gainFree=document.getElementById('gainfree'), gainNum=document.getElementById('gainnum');
+function setGain(v){
+  if(!(v>0)) return;
+  mmmv=Math.min(GAIN_MAX, Math.max(GAIN_MIN, v));
+  gainFree.value=String(Math.log(mmmv/GAIN_MIN)/Math.log(GAIN_MAX/GAIN_MIN));
+  if(document.activeElement!==gainNum) gainNum.value=String(+mmmv.toFixed(1));
+  for(const b of document.getElementById('gain').children)
+    b.classList.toggle('on', Math.abs(parseFloat(b.dataset.v)-mmmv)<1e-6);
+  try{ localStorage.setItem(GAIN_KEY, String(mmmv)); }catch(e){}
+}
+seg('gain',v=>setGain(parseFloat(v)));
+gainFree.oninput=()=>setGain(GAIN_MIN*Math.pow(GAIN_MAX/GAIN_MIN, parseFloat(gainFree.value)));
+gainNum.oninput=()=>setGain(parseFloat(String(gainNum.value).replace(',','.')));
+gainNum.onchange=()=>{ gainNum.value=String(+mmmv.toFixed(1)); };
+setGain((()=>{ try{ return parseFloat(localStorage.getItem(GAIN_KEY)); }catch(e){ return NaN; } })() || mmmv);
+for(const b of document.getElementById('qtcsel').children) b.classList.toggle('on', b.dataset.v===qtcSel);
+seg('qtcsel',v=>{ qtcSel=v; try{ localStorage.setItem(QTC_KEY, v); }catch(e){} });
+// On uc kazanci: gecmis tampon eski olcekte kalmasin diye sayfa yeniden yuklenir
+// (BLE baglantisi kopar, tekrar baglan). Kayit surerken degistirilmez.
+for(const b of document.getElementById('hwgain').children)
+  b.classList.toggle('on', parseFloat(b.dataset.v)===HW_GAIN);
+document.getElementById('hwgain').onclick=e=>{
+  const v=parseFloat(e.target.dataset.v);
+  if(e.target.tagName!=='BUTTON' || v===HW_GAIN) return;
+  if(recOn){ alert('Kayıt sürerken ön uç kazancı değiştirilemez; önce kaydı durdur.'); return; }
+  try{ localStorage.setItem(HW_GAIN_KEY, String(v)); }catch(err){ alert('Ayar saklanamadı: '+err.message); return; }
+  location.reload();
+};
 
 // --- Web Bluetooth kaynagi (tools/gen_ble_page.py ekler, elle duzenleme) ---
 // Sunucu yok: telefon cihaza dogrudan baglanir. Paket bicimi firmware ile ayni:
